@@ -47,10 +47,13 @@ def sanitize_path(path: str, base_dir: str = "/") -> str:
 
 def list_files(
     path: str, base_dir: str = "/", page: int = 1, per_page: int = 10
-) -> list:
+) -> dict:
     path = sanitize_path(path, base_dir)
+    all_files = list_dir(path)
+    total = len(all_files)
     files = []
-    for file in list_dir(path)[(page - 1) * per_page : page * per_page]:
+    
+    for file in all_files[(page - 1) * per_page : page * per_page]:
         file = os.path.join(path, file)
         if not os.path.exists(file):
             continue
@@ -68,7 +71,13 @@ def list_files(
             )
         except Exception:
             continue
-    return files
+    
+    return {
+        "items": files,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }
 
 
 def read_file(path: str, base_dir: str = "/", encoding: str = "utf-8") -> str | None:
@@ -137,5 +146,4 @@ def delete_file(path: str, base_dir: str = "/") -> bool:
 
 
 if __name__ == "__main__":
-    print(os.listdir("."))
-    print(list_dir("."))
+    pass
