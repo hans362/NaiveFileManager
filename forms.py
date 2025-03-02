@@ -20,3 +20,25 @@ class UserUpdateForm(BaseModel):
 
 class UserDeleteForm(BaseModel):
     username: str
+
+
+class FileWriteForm(BaseModel):
+    path: str
+    content: str
+    encoding: str = "utf-8"
+
+
+class FilePermissionForm(BaseModel):
+    path: str
+    mode: int
+    group: int
+    owner: int
+
+
+class FileMoveForm(BaseModel):
+    source: str
+    destination: str
+
+
+class FileDeleteForm(BaseModel):
+    path: str
