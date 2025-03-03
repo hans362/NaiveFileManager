@@ -99,38 +99,78 @@ function updatePagination(data) {
   const totalPages = Math.ceil(data.total / data.per_page);
 
   if (totalPages > 1) {
-    const pagination = $(
-      '<ul class="pagination pagination-sm m-0 float-right">'
-    );
-
-    // 上一页
+    const pagination = $('<ul class="pagination pagination-sm m-0 float-right">');
+    
+    // 上一页按钮
     pagination.append(`
-            <li class="page-item ${currentPage === 1 ? "disabled" : ""}">
-                <a class="page-link" href="javascript:void(0)" onclick="changePage(${
-                  currentPage - 1
-                })">上一页</a>
-            </li>
-        `);
+      <li class="page-item ${currentPage === 1 ? "disabled" : ""}">
+        <a class="page-link" href="javascript:void(0)" onclick="changePage(${currentPage - 1})">上一页</a>
+      </li>
+    `);
 
-    // 页码
-    for (let i = 1; i <= totalPages; i++) {
-      pagination.append(`
-                <li class="page-item ${currentPage === i ? "active" : ""}">
-                    <a class="page-link" href="javascript:void(0)" onclick="changePage(${i})">${i}</a>
-                </li>
-            `);
+    // 智能分页逻辑
+    const showPages = [];
+    const maxVisiblePages = 7; // 最多显示的页码数
+    const sidePages = 2; // 两端显示的页码数
+
+    // 总是显示第一页
+    showPages.push(1);
+
+    if (totalPages <= maxVisiblePages) {
+      // 页数较少时，显示所有页码
+      for (let i = 2; i <= totalPages; i++) {
+        showPages.push(i);
+      }
+    } else {
+      // 页数较多时，使用省略号
+      if (currentPage <= sidePages + 3) {
+        // 当前页靠近开始
+        for (let i = 2; i <= sidePages + 3; i++) {
+          showPages.push(i);
+        }
+        showPages.push("...");
+        showPages.push(totalPages);
+      } else if (currentPage >= totalPages - (sidePages + 2)) {
+        // 当前页靠近结束
+        showPages.push("...");
+        for (let i = totalPages - (sidePages + 2); i <= totalPages - 1; i++) {
+          showPages.push(i);
+        }
+        showPages.push(totalPages);
+      } else {
+        // 当前页在中间
+        showPages.push("...");
+        for (let i = currentPage - sidePages; i <= currentPage + sidePages; i++) {
+          showPages.push(i);
+        }
+        showPages.push("...");
+        showPages.push(totalPages);
+      }
     }
 
-    // 下一页
-    pagination.append(`
-            <li class="page-item ${
-              currentPage === totalPages ? "disabled" : ""
-            }">
-                <a class="page-link" href="javascript:void(0)" onclick="changePage(${
-                  currentPage + 1
-                })">下一页</a>
-            </li>
+    // 渲染页码
+    showPages.forEach(page => {
+      if (page === "...") {
+        pagination.append(`
+          <li class="page-item disabled">
+            <span class="page-link">...</span>
+          </li>
         `);
+      } else {
+        pagination.append(`
+          <li class="page-item ${currentPage === page ? "active" : ""}">
+            <a class="page-link" href="javascript:void(0)" onclick="changePage(${page})">${page}</a>
+          </li>
+        `);
+      }
+    });
+
+    // 下一页按钮
+    pagination.append(`
+      <li class="page-item ${currentPage === totalPages ? "disabled" : ""}">
+        <a class="page-link" href="javascript:void(0)" onclick="changePage(${currentPage + 1})">下一页</a>
+      </li>
+    `);
 
     footer.append(pagination);
   }
