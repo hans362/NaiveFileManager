@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ant-design-vue/1.7.8/antd.min.css">
+</head>
+
+<body>
+  <div id="app">
+    <a-form @submit="handleSubmit" class="login-form">
+      <a-form-item>
+        <a-input v-model="username" placeholder="Username" />
+      </a-form-item>
+      <a-form-item>
+        <a-input v-model="password" type="password" placeholder="Password" />
+      </a-form-item>
+      <a-form-item>
+        <a-button type="primary" html-type="submit" class="login-form-button">
+          Log in
+        </a-button>
+      </a-form-item>
+    </a-form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ant-design-vue/1.7.8/antd.min.js"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          username: '',
+          password: ''
+        };
+      },
+      methods: {
+        handleSubmit(e) {
+          e.preventDefault();
+          fetch('http://127.0.0.1:8000/api/user/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+              username: this.username,
+              password: this.password
+            })
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'success') {
+              alert('Login successful');
+              window.location.href = '/files.html';
+            } else {
+              alert('Login failed');
+            }
+          });
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>

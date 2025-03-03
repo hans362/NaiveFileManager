@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 from forms import (
     FileDeleteForm,
@@ -46,6 +47,13 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=open("data/.secretkey", "rb").read(),
     max_age=24 * 60 * 60,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -140,7 +148,7 @@ def file_list(request: Request, path: str, page: int = 1, per_page: int = 10):
 def file_download(request: Request, path: str):
     base_dir = User.load(request.session.get("uid")).base_dir
     path = sanitize_path(path, base_dir)
-    if not os.path.exists(path):
+    if not os.path.exists(path) or os.path.isdir(path):
         raise HTTPException(status_code=404, detail="Not Found")
     return FileResponse(path)
 
