@@ -4,6 +4,7 @@ from typing import Self
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from fastapi import HTTPException, Request
 
 from utils import list_dir, sha256
 
@@ -43,23 +44,31 @@ class AbstractModel:
         ]
 
     @classmethod
-    def list(self, page: int = 1, per_page: int = 10) -> list[Self]:
-        return [
-            self.load(object)
-            for object in list_dir(self.get_data_dir())[
-                (page - 1) * per_page : page * per_page
-            ]
-            if object is not None
-        ]
+    def list(self, page: int = 1, per_page: int = 10) -> dict:
+        return {
+            "items": [
+                self.load(object)
+                for object in list_dir(self.get_data_dir())[
+                    (page - 1) * per_page : page * per_page
+                ]
+                if object is not None
+            ],
+            "total": len(list_dir(self.get_data_dir())),
+            "page": page,
+            "per_page": per_page,
+        }
 
 
 class User(AbstractModel):
-    def __init__(self, username: str, password: str, base_dir: str = "/") -> None:
+    def __init__(
+        self, username: str, password: str, base_dir: str = "/", role: str = "user"
+    ) -> None:
         super().__init__()
         self.id = sha256(username)
         self.username = username
         self.password = password
         self.base_dir = base_dir
+        self.role = role
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -72,3 +81,14 @@ class User(AbstractModel):
             return True
         except VerifyMismatchError:
             return False
+
+    @staticmethod
+    def is_authenticated(request: Request):
+        if not request.session.get("uid") or not User.load(request.session.get("uid")):
+            request.session.clear()
+            raise HTTPException(status_code=401, detail="Unauthenticated")
+
+    @staticmethod
+    def is_admin(request: Request):
+        if not User.load(request.session.get("uid")).role == "admin":
+            raise HTTPException(status_code=403, detail="Unauthorized")

@@ -41,7 +41,7 @@ def list_dir(path: str) -> list:
 def sanitize_path(path: str, base_dir: str = "/") -> str:
     if not path.startswith("/"):
         path = "/"
-    path = os.path.join(base_dir, os.path.normpath(path))
+    path = os.path.join(base_dir, os.path.normpath(path).lstrip("/"))
     return path
 
 
@@ -52,7 +52,7 @@ def list_files(
     all_files = list_dir(path)
     total = len(all_files)
     files = []
-    
+
     for file in all_files[(page - 1) * per_page : page * per_page]:
         file = os.path.join(path, file)
         if not os.path.exists(file):
@@ -71,7 +71,7 @@ def list_files(
             )
         except Exception:
             continue
-    
+
     return {
         "items": files,
         "total": total,
@@ -140,6 +140,20 @@ def delete_file(path: str, base_dir: str = "/") -> bool:
         return False
     try:
         os.remove(path)
+        return True
+    except Exception:
+        return False
+
+
+def create_file(path: str, type: str, base_dir: str = "/") -> bool:
+    path = sanitize_path(path, base_dir)
+    if os.path.exists(path):
+        return False
+    try:
+        if type == "file":
+            open(path, "w").close()
+        elif type == "dir":
+            os.makedirs(path)
         return True
     except Exception:
         return False

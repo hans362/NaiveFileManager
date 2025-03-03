@@ -10,12 +10,14 @@ class UserCreateForm(BaseModel):
     username: str
     password: str
     base_dir: str = "/"
+    role: str = "user"
 
 
 class UserUpdateForm(BaseModel):
     username: str
     password: str = None
     base_dir: str = "/"
+    role: str = "user"
 
 
 class UserDeleteForm(BaseModel):
