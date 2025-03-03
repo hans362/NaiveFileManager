@@ -39,7 +39,7 @@
       methods: {
         handleSubmit(e) {
           e.preventDefault();
-          fetch('http://127.0.0.1:8000/api/user/login', {
+          fetch('/api/user/login', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded'
@@ -53,7 +53,7 @@
           .then(data => {
             if (data.status === 'success') {
               alert('Login successful');
-              window.location.href = '/files.html';
+              window.location.href = '/';
             } else {
               alert('Login failed');
             }

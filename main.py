@@ -2,9 +2,10 @@ import os
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from forms import (
     FileDeleteForm,
@@ -39,7 +40,9 @@ def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(root_path="/api", lifespan=lifespan)
+app = FastAPI(lifespan=lifespan)
+api = FastAPI()
+app.mount("/api", api)
 
 if not os.path.exists("data/.secretkey"):
     open("data/.secretkey", "wb").write(os.urandom(32))
@@ -48,21 +51,44 @@ app.add_middleware(
     secret_key=open("data/.secretkey", "rb").read(),
     max_age=24 * 60 * 60,
 )
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 
 @app.get("/")
+def index(request: Request):
+    try:
+        User.is_authenticated(request)
+        return RedirectResponse("/files")
+    except Exception:
+        return RedirectResponse("/login")
+
+
+@app.get("/login")
+def login(request: Request):
+    try:
+        User.is_authenticated(request)
+        return RedirectResponse("/files")
+    except Exception:
+        return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/files")
+def files(request: Request):
+    try:
+        User.is_authenticated(request)
+        return templates.TemplateResponse("files.html", {"request": request})
+    except Exception:
+        return RedirectResponse("/")
+
+
+@api.get("/")
 def status():
-    return {"status": "success", "message": "NaiveFileManager is running."}
+    return {"status": "success", "message": "NaiveFileManagerAPI is running."}
 
 
-@app.post("/user/login")
+@api.post("/user/login")
 def user_login(request: Request, data: Annotated[UserLoginForm, Form()]):
     user = User.load(sha256(data.username))
     if user and User.verify_password(data.password, user.password):
@@ -71,13 +97,13 @@ def user_login(request: Request, data: Annotated[UserLoginForm, Form()]):
     return {"status": "failed", "message": "Login failed."}
 
 
-@app.post("/user/logout", dependencies=[Depends(User.is_authenticated)])
+@api.post("/user/logout", dependencies=[Depends(User.is_authenticated)])
 def user_logout(request: Request):
     request.session.clear()
     return {"status": "success", "message": "Logout success."}
 
 
-@app.get(
+@api.get(
     "/user/list", dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)]
 )
 def user_list(page: int = 1, per_page: int = 10):
@@ -96,7 +122,7 @@ def user_list(page: int = 1, per_page: int = 10):
     }
 
 
-@app.put(
+@api.put(
     "/user/create",
     dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)],
 )
@@ -110,7 +136,7 @@ def user_create(data: Annotated[UserCreateForm, Form()]):
     return {"status": "success", "message": "User created."}
 
 
-@app.patch(
+@api.patch(
     "/user/update",
     dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)],
 )
@@ -126,7 +152,7 @@ def user_update(data: Annotated[UserUpdateForm, Form()]):
     return {"status": "success", "message": "User updated."}
 
 
-@app.delete(
+@api.delete(
     "/user/delete",
     dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)],
 )
@@ -138,13 +164,13 @@ def user_delete(data: Annotated[UserDeleteForm, Form()]):
     return {"status": "success", "message": "User deleted."}
 
 
-@app.get("/file/list", dependencies=[Depends(User.is_authenticated)])
+@api.get("/file/list", dependencies=[Depends(User.is_authenticated)])
 def file_list(request: Request, path: str, page: int = 1, per_page: int = 10):
     base_dir = User.load(request.session.get("uid")).base_dir
     return {"status": "success", "data": list_files(path, base_dir, page, per_page)}
 
 
-@app.get("/file/download", dependencies=[Depends(User.is_authenticated)])
+@api.get("/file/download", dependencies=[Depends(User.is_authenticated)])
 def file_download(request: Request, path: str):
     base_dir = User.load(request.session.get("uid")).base_dir
     path = sanitize_path(path, base_dir)
@@ -153,7 +179,7 @@ def file_download(request: Request, path: str):
     return FileResponse(path)
 
 
-@app.get("/file/read", dependencies=[Depends(User.is_authenticated)])
+@api.get("/file/read", dependencies=[Depends(User.is_authenticated)])
 def file_read(request: Request, path: str, encoding: str = "utf-8"):
     base_dir = User.load(request.session.get("uid")).base_dir
     content = read_file(path, base_dir, encoding)
@@ -162,7 +188,7 @@ def file_read(request: Request, path: str, encoding: str = "utf-8"):
     return {"status": "success", "data": content}
 
 
-@app.patch("/file/write", dependencies=[Depends(User.is_authenticated)])
+@api.patch("/file/write", dependencies=[Depends(User.is_authenticated)])
 def file_write(request: Request, data: Annotated[FileWriteForm, Form()]):
     base_dir = User.load(request.session.get("uid")).base_dir
     if write_file(data.path, data.content, base_dir, data.encoding):
@@ -170,7 +196,7 @@ def file_write(request: Request, data: Annotated[FileWriteForm, Form()]):
     return {"status": "failed", "message": "Write failed."}
 
 
-@app.patch("/file/permission", dependencies=[Depends(User.is_authenticated)])
+@api.patch("/file/permission", dependencies=[Depends(User.is_authenticated)])
 def file_permission(request: Request, data: Annotated[FilePermissionForm, Form()]):
     base_dir = User.load(request.session.get("uid")).base_dir
     if change_file_permission(data.path, data.mode, data.group, data.owner, base_dir):
@@ -178,7 +204,7 @@ def file_permission(request: Request, data: Annotated[FilePermissionForm, Form()
     return {"status": "failed", "message": "Permission update failed."}
 
 
-@app.patch("/file/move", dependencies=[Depends(User.is_authenticated)])
+@api.patch("/file/move", dependencies=[Depends(User.is_authenticated)])
 def file_move(request: Request, data: Annotated[FileMoveForm, Form()]):
     base_dir = User.load(request.session.get("uid")).base_dir
     if move_file(data.source, data.destination, base_dir):
@@ -186,7 +212,7 @@ def file_move(request: Request, data: Annotated[FileMoveForm, Form()]):
     return {"status": "failed", "message": "Move failed."}
 
 
-@app.delete("/file/delete", dependencies=[Depends(User.is_authenticated)])
+@api.delete("/file/delete", dependencies=[Depends(User.is_authenticated)])
 def file_delete(request: Request, data: Annotated[FileDeleteForm, Form()]):
     base_dir = User.load(request.session.get("uid")).base_dir
     if delete_file(data.path, base_dir):
@@ -194,7 +220,7 @@ def file_delete(request: Request, data: Annotated[FileDeleteForm, Form()]):
     return {"status": "failed", "message": "Delete failed."}
 
 
-@app.post("/file/create", dependencies=[Depends(User.is_authenticated)])
+@api.post("/file/create", dependencies=[Depends(User.is_authenticated)])
 def file_create(request: Request, path: str, type: str):
     base_dir = User.load(request.session.get("uid")).base_dir
     if create_file(path, type, base_dir):
@@ -202,11 +228,11 @@ def file_create(request: Request, path: str, type: str):
     return {"status": "failed", "message": "Create failed."}
 
 
-@app.get("/system/group/list", dependencies=[Depends(User.is_authenticated)])
+@api.get("/system/group/list", dependencies=[Depends(User.is_authenticated)])
 def system_group_list():
     return {"status": "success", "data": get_groups_list()}
 
 
-@app.get("/system/user/list", dependencies=[Depends(User.is_authenticated)])
+@api.get("/system/user/list", dependencies=[Depends(User.is_authenticated)])
 def system_user_list():
     return {"status": "success", "data": get_users_list()}

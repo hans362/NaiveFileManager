@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}文件管理{% endblock %}
+{% block content %}
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <a type="button" class="btn btn-sm btn-primary" onclick="uploadFile()">
+            <i class="fas fa-upload"></i>
+            上传文件
+          </a>
+          <a type="button" class="btn btn-sm btn-primary" onclick="createFolder()">
+            <i class="fas fa-plus"></i>
+            新建文件夹
+          </a>
+          <a type="button" class="btn btn-sm btn-primary" onclick="createFile()">
+            <i class="fas fa-plus"></i>
+            新建空白文件
+          </a>
+        </div>
+        <div class="card-body">
+          <table class="table table-bordered table-hover">
+            <thead>
+              <tr>
+                <th>文件名</th>
+                <th>大小</th>
+                <th>修改时间</th>
+                <th>权限</th>
+                <th>所有者</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer clearfix"></div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+{% block script %}<script src="/static/js/files.js"></script>{% endblock %}
