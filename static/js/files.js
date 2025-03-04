@@ -1,12 +1,50 @@
 let currentPath = "/";
 let currentPage = 1;
-const perPage = 10;
+let uidMapping = {};
+let gidMapping = {};
+const perPage = 15;
 
 $(document).ready(function () {
   loadFileList();
 });
 
+function loadSystemGroups() {
+  $.get("/api/system/group/list")
+    .done(function (response) {
+      if (response.status === "success") {
+        gidMapping = {};
+        response.data.forEach(function (group) {
+          gidMapping[group.gid] = group.name;
+        });
+      } else {
+        alert("加载系统用户组信息失败");
+      }
+    })
+    .fail(function () {
+      alert("加载系统用户组信息失败");
+    });
+}
+
+function loadSystemUsers() {
+  $.get("/api/system/user/list")
+    .done(function (response) {
+      if (response.status === "success") {
+        uidMapping = {};
+        response.data.forEach(function (user) {
+          uidMapping[user.uid] = user.name;
+        });
+      } else {
+        alert("加载系统用户信息失败");
+      }
+    })
+    .fail(function () {
+      alert("加载系统用户信息失败");
+    });
+}
+
 function loadFileList() {
+  loadSystemGroups();
+  loadSystemUsers();
   $.get(
     `/api/file/list?path=${encodeURIComponent(
       currentPath
@@ -26,9 +64,31 @@ function loadFileList() {
 }
 
 function updateFileList(data) {
+  const breadcrumb = $(".breadcrumb").empty();
+  const pathArray = currentPath.split("/").filter((item) => item);
+  let combinedPath = "";
+  breadcrumb.append(`
+        <li class="breadcrumb-item">
+            <a href="javascript:void(0)" onclick="navigateTo('/')">
+                <i class="fas fa-home"></i>
+            </a>
+        </li>
+    `);
+  pathArray.forEach(function (item, index) {
+    combinedPath += item + "/";
+    if (index === pathArray.length - 1) {
+      breadcrumb.append(`
+            <li class="breadcrumb-item active" aria-current="page">${item}</li>
+        `);
+    } else {
+      breadcrumb.append(`
+            <li class="breadcrumb-item">
+                <a href="javascript:void(0)" onclick="navigateTo('${combinedPath}')">${item}</a>
+            </li>
+        `);
+    }
+  });
   const tbody = $("tbody").empty();
-
-  // 添加返回上级目录的行（如果不在根目录）
   if (currentPath !== "/") {
     const parentPath = currentPath.split("/").slice(0, -2).join("/") + "/";
     tbody.append(`
@@ -41,17 +101,18 @@ function updateFileList(data) {
             </tr>
         `);
   }
-
-  // 添加文件和目录
   data.items.forEach(function (item) {
     const icon =
       item.type === "dir"
         ? '<i class="fas fa-folder text-warning"></i>'
         : '<i class="fas fa-file text-primary"></i>';
-
-    const size = item.type === "dir" ? "-" : formatFileSize(item.size);
+    const size = formatFileSize(item.size);
     const lastModified = new Date(item.last_modified * 1000).toLocaleString();
-
+    const owner =
+      (gidMapping[item.gid] || item.gid) +
+      `<span class="text-secondary text-sm">（用户组）</span>` +
+      (uidMapping[item.uid] || item.uid) +
+      `<span class="text-secondary text-sm">（用户）</span>`;
     const actions = `
             <div class="btn-group">
                 ${
@@ -73,7 +134,6 @@ function updateFileList(data) {
                 </button>
             </div>
         `;
-
     tbody.append(`
             <tr>
                 <td>
@@ -83,97 +143,89 @@ function updateFileList(data) {
                         ? `<a href="javascript:void(0)" onclick="navigateTo('${currentPath}${item.name}/')">${item.name}</a>`
                         : item.name
                     }
+                    ${
+                      item.target
+                        ? `<span class="text-secondary text-sm">→ ${item.target}</span>`
+                        : ""
+                    }
                 </td>
                 <td>${size}</td>
                 <td>${lastModified}</td>
-                <td>${item.uid}</td>
-                <td>${item.gid}</td>
+                <td>${item.permission}</td>
+                <td>${owner}</td>
                 <td>${actions}</td>
             </tr>
-        `);
+    `);
   });
 }
 
 function updatePagination(data) {
   const footer = $(".card-footer").empty();
-  const totalPages = Math.ceil(data.total / data.per_page);
-
-  if (totalPages > 1) {
-    const pagination = $('<ul class="pagination pagination-sm m-0 float-right">');
-    
-    // 上一页按钮
-    pagination.append(`
+  const totalPages =
+    Math.ceil(data.total / data.per_page) == 0
+      ? 1
+      : Math.ceil(data.total / data.per_page);
+  const pagination = $('<ul class="pagination m-0 float-right">');
+  pagination.append(`
       <li class="page-item ${currentPage === 1 ? "disabled" : ""}">
-        <a class="page-link" href="javascript:void(0)" onclick="changePage(${currentPage - 1})">上一页</a>
+        <a class="page-link" href="javascript:void(0)" onclick="changePage(${
+          currentPage - 1
+        })">上一页</a>
       </li>
     `);
-
-    // 智能分页逻辑
-    const showPages = [];
-    const maxVisiblePages = 7; // 最多显示的页码数
-    const sidePages = 2; // 两端显示的页码数
-
-    // 总是显示第一页
-    showPages.push(1);
-
-    if (totalPages <= maxVisiblePages) {
-      // 页数较少时，显示所有页码
-      for (let i = 2; i <= totalPages; i++) {
+  const showPages = [];
+  const maxVisiblePages = 7;
+  const sidePages = 2;
+  showPages.push(1);
+  if (totalPages <= maxVisiblePages) {
+    for (let i = 2; i <= totalPages; i++) {
+      showPages.push(i);
+    }
+  } else {
+    if (currentPage <= sidePages + 3) {
+      for (let i = 2; i <= sidePages + 3; i++) {
         showPages.push(i);
       }
-    } else {
-      // 页数较多时，使用省略号
-      if (currentPage <= sidePages + 3) {
-        // 当前页靠近开始
-        for (let i = 2; i <= sidePages + 3; i++) {
-          showPages.push(i);
-        }
-        showPages.push("...");
-        showPages.push(totalPages);
-      } else if (currentPage >= totalPages - (sidePages + 2)) {
-        // 当前页靠近结束
-        showPages.push("...");
-        for (let i = totalPages - (sidePages + 2); i <= totalPages - 1; i++) {
-          showPages.push(i);
-        }
-        showPages.push(totalPages);
-      } else {
-        // 当前页在中间
-        showPages.push("...");
-        for (let i = currentPage - sidePages; i <= currentPage + sidePages; i++) {
-          showPages.push(i);
-        }
-        showPages.push("...");
-        showPages.push(totalPages);
+      showPages.push("...");
+      showPages.push(totalPages);
+    } else if (currentPage >= totalPages - (sidePages + 2)) {
+      showPages.push("...");
+      for (let i = totalPages - (sidePages + 2); i <= totalPages - 1; i++) {
+        showPages.push(i);
       }
+      showPages.push(totalPages);
+    } else {
+      showPages.push("...");
+      for (let i = currentPage - sidePages; i <= currentPage + sidePages; i++) {
+        showPages.push(i);
+      }
+      showPages.push("...");
+      showPages.push(totalPages);
     }
-
-    // 渲染页码
-    showPages.forEach(page => {
-      if (page === "...") {
-        pagination.append(`
+  }
+  showPages.forEach((page) => {
+    if (page === "...") {
+      pagination.append(`
           <li class="page-item disabled">
             <span class="page-link">...</span>
           </li>
         `);
-      } else {
-        pagination.append(`
+    } else {
+      pagination.append(`
           <li class="page-item ${currentPage === page ? "active" : ""}">
             <a class="page-link" href="javascript:void(0)" onclick="changePage(${page})">${page}</a>
           </li>
         `);
-      }
-    });
-
-    // 下一页按钮
-    pagination.append(`
+    }
+  });
+  pagination.append(`
       <li class="page-item ${currentPage === totalPages ? "disabled" : ""}">
-        <a class="page-link" href="javascript:void(0)" onclick="changePage(${currentPage + 1})">下一页</a>
+        <a class="page-link" href="javascript:void(0)" onclick="changePage(${
+          currentPage + 1
+        })">下一页</a>
       </li>
     `);
-
-    footer.append(pagination);
-  }
+  footer.append(pagination);
 }
 
 function changePage(page) {
@@ -201,11 +253,9 @@ function uploadFile() {
   input.on("change", function (e) {
     const files = e.target.files;
     const formData = new FormData();
-
     for (let i = 0; i < files.length; i++) {
       formData.append("files", files[i]);
     }
-
     $.ajax({
       url: `/api/file/upload?path=${encodeURIComponent(currentPath)}`,
       type: "POST",
@@ -230,7 +280,6 @@ function uploadFile() {
 function createFolder() {
   const folderName = prompt("请输入文件夹名称：");
   if (!folderName) return;
-
   $.post(
     `/api/file/create?path=${encodeURIComponent(
       currentPath + folderName
@@ -251,7 +300,6 @@ function createFolder() {
 function createFile() {
   const fileName = prompt("请输入文件名：");
   if (!fileName) return;
-
   $.post(
     `/api/file/create?path=${encodeURIComponent(
       currentPath + fileName
@@ -277,7 +325,6 @@ function downloadFile(fileName) {
 
 function deleteFile(fileName) {
   if (!confirm("确定要删除该文件/文件夹吗？")) return;
-
   $.ajax({
     url: "/api/file/delete",
     type: "DELETE",
@@ -296,7 +343,6 @@ function deleteFile(fileName) {
 }
 
 function showPermissionDialog(fileName, currentUid, currentGid) {
-  // 获取系统用户和组列表
   $.when($.get("/api/system/user/list"), $.get("/api/system/group/list")).done(
     function (userResponse, groupResponse) {
       if (
@@ -305,7 +351,6 @@ function showPermissionDialog(fileName, currentUid, currentGid) {
       ) {
         const users = userResponse[0].data;
         const groups = groupResponse[0].data;
-
         const dialog = $(`
                 <div class="modal fade" tabindex="-1">
                     <div class="modal-dialog">
@@ -367,7 +412,6 @@ function showPermissionDialog(fileName, currentUid, currentGid) {
                     </div>
                 </div>
             `);
-
         dialog.modal("show");
       } else {
         alert("获取用户和组信息失败");
@@ -380,7 +424,6 @@ function changePermission(fileName) {
   const mode = parseInt($("#mode").val(), 8);
   const owner = parseInt($("#owner").val());
   const group = parseInt($("#group").val());
-
   $.ajax({
     url: "/api/file/permission",
     type: "PATCH",

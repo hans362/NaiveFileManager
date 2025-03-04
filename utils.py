@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shutil
 
 
 def sha256(string: str) -> str:
@@ -46,7 +47,7 @@ def sanitize_path(path: str, base_dir: str = "/") -> str:
 
 
 def list_files(
-    path: str, base_dir: str = "/", page: int = 1, per_page: int = 10
+    path: str, base_dir: str = "/", page: int = 1, per_page: int = 15
 ) -> dict:
     path = sanitize_path(path, base_dir)
     all_files = list_dir(path)
@@ -64,6 +65,7 @@ def list_files(
                     "size": os.stat(file).st_size,
                     "type": "dir" if os.path.isdir(file) else "file",
                     "target": os.readlink(file) if os.path.islink(file) else None,
+                    "permission": oct(os.stat(file).st_mode)[-3:],
                     "gid": os.stat(file).st_gid,
                     "uid": os.stat(file).st_uid,
                     "last_modified": int(os.stat(file).st_mtime),
@@ -139,7 +141,12 @@ def delete_file(path: str, base_dir: str = "/") -> bool:
     if not os.path.exists(path):
         return False
     try:
-        os.remove(path)
+        if os.path.islink(path):
+            os.unlink(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
         return True
     except Exception:
         return False

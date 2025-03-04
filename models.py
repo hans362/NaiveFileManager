@@ -44,7 +44,7 @@ class AbstractModel:
         ]
 
     @classmethod
-    def list(self, page: int = 1, per_page: int = 10) -> dict:
+    def list(self, page: int = 1, per_page: int = 15) -> dict:
         return {
             "items": [
                 self.load(object)

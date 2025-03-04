@@ -106,7 +106,7 @@ def user_logout(request: Request):
 @api.get(
     "/user/list", dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)]
 )
-def user_list(page: int = 1, per_page: int = 10):
+def user_list(page: int = 1, per_page: int = 15):
     data = User.list(page, per_page)
     return {
         "status": "success",
@@ -165,7 +165,7 @@ def user_delete(data: Annotated[UserDeleteForm, Form()]):
 
 
 @api.get("/file/list", dependencies=[Depends(User.is_authenticated)])
-def file_list(request: Request, path: str, page: int = 1, per_page: int = 10):
+def file_list(request: Request, path: str, page: int = 1, per_page: int = 15):
     base_dir = User.load(request.session.get("uid")).base_dir
     return {"status": "success", "data": list_files(path, base_dir, page, per_page)}
 
