@@ -41,7 +41,7 @@ def list_dir(path: str) -> list:
 
 def sanitize_path(path: str, base_dir: str = "/") -> str:
     if not path.startswith("/"):
-        path = "/"
+        path = "/" + path
     path = os.path.join(base_dir, os.path.normpath(path).lstrip("/"))
     return path
 
