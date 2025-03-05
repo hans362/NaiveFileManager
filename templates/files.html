@@ -1,55 +1,633 @@
-{% extends "base.html" %}
-{% block title %}文件管理{% endblock %}
-{% block style %}
-  <style>
-    td {
-      text-overflow: ellipsis;
-      overflow: hidden;
-      white-space: nowrap;
-    }
-  </style>
-{% endblock %}
-{% block content %}
-  <div class="row">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header">
-          <a type="button" class="btn btn-sm btn-primary" onclick="uploadFile()">
-            <i class="fas fa-upload"></i>
-            上传文件
-          </a>
-          <a type="button" class="btn btn-sm btn-success" onclick="createFolder()">
-            <i class="fas fa-plus"></i>
-            新建文件夹
-          </a>
-          <a type="button" class="btn btn-sm btn-success" onclick="createFile()">
-            <i class="fas fa-plus"></i>
-            新建空白文件
-          </a>
-        </div>
-        <div class="card-body">
-          <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-            </ol>
-          </nav>
-          <table class="table table-bordered table-hover">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th width="10%">大小</th>
-                <th width="15%">修改时间</th>
-                <th width="5%">权限</th>
-                <th width="25%">所有者</th>
-                <th width="15%">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-            </tbody>
-          </table>
-        </div>
-        <div class="card-footer clearfix"></div>
-      </div>
+{% raw %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>文件管理 | NaiveFileManager</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/monokai.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ant-design-vue@1.7.8/dist/antd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/xml/xml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/css/css.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/shell/shell.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <a-layout style="min-height: 100vh">
+        <a-layout-sider theme="dark">
+          <div
+            class="logo"
+            style="
+              height: 64px;
+              padding: 16px;
+              color: white;
+              text-align: center;
+            "
+          >
+            <h2 style="margin: 0; color: white">NaiveFileManager</h2>
+          </div>
+          <a-menu
+            theme="dark"
+            mode="inline"
+            :default-selected-keys="['files']"
+            style="height: calc(100% - 64px)"
+            @click="handleMenuClick"
+          >
+            <a-menu-item key="files">
+              <a-icon type="folder"></a-icon>
+              <span>文件管理</span>
+            </a-menu-item>
+            <a-menu-item key="logs">
+              <a-icon type="file-text"></a-icon>
+              <span>日志管理</span>
+            </a-menu-item>
+            <a-menu-item key="users">
+              <a-icon type="team"></a-icon>
+              <span>用户管理</span>
+            </a-menu-item>
+          </a-menu>
+        </a-layout-sider>
+        <a-layout>
+          <a-layout-header
+            style="
+              background: #001529;
+              padding: 0 16px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div style="font-size: 16px; font-weight: 500; color: white">
+              文件管理
+            </div>
+            <a-button type="link" style="color: white" @click="handleLogout">
+              <a-icon type="logout"></a-icon>
+              退出登录
+            </a-button>
+          </a-layout-header>
+          <a-layout-content style="margin: 16px">
+            <a-breadcrumb style="margin-bottom: 16px">
+              <a-breadcrumb-item
+                v-for="(path, index) in breadcrumbItems"
+                :key="index"
+              >
+                <a @click="navigateTo(path.path)">{{ path.name }}</a>
+              </a-breadcrumb-item>
+            </a-breadcrumb>
+            <a-card>
+              <div style="margin-bottom: 16px">
+                <a-button-group>
+                  <a-button type="primary" @click="showCreateModal('file')">
+                    <a-icon type="file-add"></a-icon>
+                    新建文件
+                  </a-button>
+                  <a-button type="primary" @click="showCreateModal('dir')">
+                    <a-icon type="folder-add"></a-icon>
+                    新建文件夹
+                  </a-button>
+                </a-button-group>
+              </div>
+              <a-table
+                :columns="columns"
+                :data-source="fileList"
+                :pagination="pagination"
+                @change="handleTableChange"
+              >
+                <template slot="name" slot-scope="text, record">
+                  <a
+                    v-if="record.type === 'dir'"
+                    @click="enterDirectory(record.name)"
+                  >
+                    <a-icon
+                      type="folder"
+                      theme="filled"
+                      style="margin-right: 8px"
+                    ></a-icon>
+                    {{ record.name }}
+                    <span v-if="record.target" style="color: #999; margin-left: 8px">
+                      &rarr; {{ record.target }}
+                    </span>
+                  </a>
+                  <span v-else>
+                    <a-icon type="file" style="margin-right: 8px"></a-icon>
+                    {{ record.name }}
+                    <span v-if="record.target" style="color: #999; margin-left: 8px">
+                      &rarr; {{ record.target }}
+                    </span>
+                  </span>
+                </template>
+                <template slot="owner" slot-scope="text, record">
+                  <span>
+                    {{ groupsMap[record.gid] || record.gid }} / {{ usersMap[record.uid] || record.uid }}
+                  </span>
+                </template>
+                <template slot="action" slot-scope="text, record">
+                  <a-button-group>
+                    <a-button type="link" v-if="record.type !== 'dir'" @click="handleDownload(record)">
+                      <a-icon type="download"></a-icon>
+                      下载
+                    </a-button>
+                    <a-button type="link" v-if="record.type !== 'dir'" @click="showEditModal(record)">
+                      <a-icon type="edit"></a-icon>
+                      编辑
+                    </a-button>
+                    <a-button type="link" @click="showRenameModal(record)">
+                      <a-icon type="edit"></a-icon>
+                      重命名
+                    </a-button>
+                    <a-button type="link" style="color: #ff4d4f" @click="showDeleteConfirm(record)">
+                      <a-icon type="delete"></a-icon>
+                      删除
+                    </a-button>
+                  </a-button-group>
+                </template>
+              </a-table>
+            </a-card>
+          </a-layout-content>
+        </a-layout>
+      </a-layout>
+      <a-modal
+        :visible="createModalVisible"
+        :title="createType === 'file' ? '新建文件' : '新建文件夹'"
+        @ok="handleCreate"
+        @cancel="createModalVisible = false"
+      >
+        <a-form-item label="名称">
+          <a-input v-model="createName" placeholder="请输入名称"></a-input>
+        </a-form-item>
+      </a-modal>
+      <a-modal
+        :visible="renameModalVisible"
+        title="重命名"
+        @ok="handleRename"
+        @cancel="renameModalVisible = false"
+      >
+        <a-form-item label="新名称">
+          <a-input v-model="newName" :placeholder="'请输入新的名称（原名称：' + oldName + '）'"></a-input>
+        </a-form-item>
+      </a-modal>
+      <a-modal
+        :visible="editModalVisible"
+        title="编辑文件"
+        :width="800"
+        @ok="handleEdit"
+        @cancel="editModalVisible = false"
+        :okText="'保存'"
+        :cancelText="'取消'"
+      >
+        <div ref="editor" style="border: 1px solid #d9d9d9; margin-bottom: 16px"></div>
+      </a-modal>
     </div>
-  </div>
-{% endblock %}
-{% block script %}<script src="/static/js/files.js"></script>{% endblock %}
+    <script>
+      new Vue({
+        el: "#app",
+        data() {
+          return {
+            currentPath: "/",
+            createModalVisible: false,
+            createType: "file",
+            createName: "",
+            renameModalVisible: false,
+            oldName: "",
+            newName: "",
+            editModalVisible: false,
+            editingFile: null,
+            editor: null,
+            fileList: [],
+            pagination: {
+              current: 1,
+              pageSize: 15,
+              total: 0,
+            },
+            usersMap: {},
+            groupsMap: {},
+            columns: [
+              {
+                title: "名称",
+                dataIndex: "name",
+                key: "name",
+                scopedSlots: { customRender: "name" },
+              },
+              {
+                title: "大小",
+                dataIndex: "size",
+                key: "size",
+                customRender: (text) => {
+                  if (text < 1024) return text + " B";
+                  if (text < 1024 * 1024)
+                    return (text / 1024).toFixed(2) + " KB";
+                  return (text / 1024 / 1024).toFixed(2) + " MB";
+                },
+              },
+              {
+                title: "修改时间",
+                dataIndex: "last_modified",
+                key: "last_modified",
+                customRender: (text) => new Date(text * 1000).toLocaleString(),
+              },
+              {
+                title: "权限",
+                dataIndex: "permission",
+                key: "permission",
+              },
+              {
+                title: "所有者",
+                key: "owner",
+                scopedSlots: { customRender: "owner" },
+              },
+              {
+                title: "操作",
+                key: "action",
+                scopedSlots: { customRender: "action" },
+              },
+            ],
+          };
+        },
+        computed: {
+          breadcrumbItems() {
+            const paths = [{ name: "根目录", path: "/" }];
+            if (this.currentPath === "/") return paths;
+            const parts = this.currentPath.split("/").filter(Boolean);
+            let currentPath = "";
+            for (const part of parts) {
+              currentPath += "/" + part;
+              paths.push({
+                name: part,
+                path: currentPath,
+              });
+            }
+            return paths;
+          },
+        },
+        methods: {
+          loadUsers() {
+            return axios
+              .get("/api/system/user/list")
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.usersMap = response.data.data.reduce((map, user) => {
+                    map[user.uid] = user.name;
+                    return map;
+                  }, {});
+                }
+                return response;
+              })
+              .catch(() => {
+                this.$message.error("获取用户列表失败");
+              });
+          },
+          loadGroups() {
+            return axios
+              .get("/api/system/group/list")
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.groupsMap = response.data.data.reduce((map, group) => {
+                    map[group.gid] = group.name;
+                    return map;
+                  }, {});
+                }
+                return response;
+              })
+              .catch(() => {
+                this.$message.error("获取用户组列表失败");
+              });
+          },
+          loadFileList() {
+            Promise.all([
+              this.loadUsers(),
+              this.loadGroups(),
+              axios.get("/api/file/list", {
+                params: {
+                  path: this.currentPath,
+                  page: this.pagination.current,
+                  per_page: this.pagination.pageSize,
+                },
+              }),
+            ])
+              .then(([_, __, response]) => {
+                if (response.data.status === "success") {
+                  this.fileList = response.data.data.items;
+                  this.pagination.total = response.data.data.total;
+                } else {
+                  this.fileList = [];
+                  this.pagination.total = 0;
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch((error) => {
+                this.fileList = [];
+                this.pagination.total = 0;
+                this.$message.error("获取文件列表失败");
+              });
+          },
+          handleTableChange(pagination) {
+            this.pagination.current = pagination.current;
+            this.loadFileList();
+          },
+          enterDirectory(dirname) {
+            this.currentPath += "/" + dirname;
+            this.pagination.current = 1;
+            this.loadFileList();
+          },
+          navigateTo(path) {
+            this.currentPath = path;
+            this.pagination.current = 1;
+            this.loadFileList();
+          },
+          handleLogout() {
+            axios
+              .post("/api/user/logout")
+              .then((response) => {
+                if (response.data.status === "success") {
+                  window.location.href = "/login";
+                } else {
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch(() => {
+                this.$message.error("退出登录失败");
+              });
+          },
+          handleMenuClick({ key }) {
+            switch (key) {
+              case "files":
+                window.location.href = "/files";
+                break;
+              case "logs":
+                window.location.href = "/logs";
+                break;
+              case "users":
+                window.location.href = "/users";
+                break;
+            }
+          },
+          showCreateModal(type) {
+            this.createType = type;
+            this.createName = "";
+            this.createModalVisible = true;
+          },
+          handleCreate() {
+            if (!this.createName) {
+              this.$message.error("请输入名称");
+              return;
+            }
+            const path = this.currentPath === "/" 
+              ? "/" + this.createName 
+              : this.currentPath + "/" + this.createName;
+            
+            const params = new URLSearchParams();
+            params.append('path', path);
+            params.append('type', this.createType);
+            
+            axios.post("/api/file/create", params, {
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            })
+            .then(response => {
+              if (response.data.status === "success") {
+                this.$message.success(
+                  this.createType === "file" ? "文件创建成功" : "文件夹创建成功"
+                );
+                this.loadFileList();
+              } else {
+                this.$message.error(response.data.message);
+              }
+            })
+            .catch(() => {
+              this.$message.error(
+                this.createType === "file" ? "文件创建失败" : "文件夹创建失败"
+              );
+            })
+            .finally(() => {
+              this.createModalVisible = false;
+            });
+          },
+          showRenameModal(record) {
+            this.oldName = record.name;
+            this.newName = record.name;
+            this.renameModalVisible = true;
+          },
+          handleRename() {
+            if (!this.newName) {
+              this.$message.error("请输入新名称");
+              return;
+            }
+            if (this.newName === this.oldName) {
+              this.$message.info("新名称与原名称相同");
+              this.renameModalVisible = false;
+              return;
+            }
+
+            const sourcePath = this.currentPath === "/" 
+              ? "/" + this.oldName 
+              : this.currentPath + "/" + this.oldName;
+            const destPath = this.currentPath === "/" 
+              ? "/" + this.newName 
+              : this.currentPath + "/" + this.newName;
+
+            const params = new URLSearchParams();
+            params.append('source', sourcePath);
+            params.append('destination', destPath);
+
+            axios.patch("/api/file/move", params, {
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            })
+            .then(response => {
+              if (response.data.status === "success") {
+                this.$message.success("重命名成功");
+                this.loadFileList();
+              } else {
+                this.$message.error(response.data.message);
+              }
+            })
+            .catch(() => {
+              this.$message.error("重命名失败");
+            })
+            .finally(() => {
+              this.renameModalVisible = false;
+            });
+          },
+          showDeleteConfirm(record) {
+            const path = this.currentPath === "/" 
+              ? "/" + record.name 
+              : this.currentPath + "/" + record.name;
+            
+            this.$confirm({
+              title: "确认删除",
+              content: `确定要删除${record.type === 'dir' ? '文件夹' : '文件'} "${record.name}" 吗？`,
+              okText: "确认",
+              okType: "danger",
+              cancelText: "取消",
+              onOk: () => {
+                const params = new URLSearchParams();
+                params.append('path', path);
+
+                axios.delete("/api/file/delete", {
+                  data: params,
+                  headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                  }
+                })
+                .then(response => {
+                  if (response.data.status === "success") {
+                    this.$message.success("删除成功");
+                    this.loadFileList();
+                  } else {
+                    this.$message.error(response.data.message);
+                  }
+                })
+                .catch(() => {
+                  this.$message.error("删除失败");
+                });
+              }
+            });
+          },
+          handleDownload(record) {
+            const path = this.currentPath === "/" 
+              ? "/" + record.name 
+              : this.currentPath + "/" + record.name;
+            
+            axios.get("/api/file/download", {
+              params: {
+                path: path
+              },
+              responseType: 'blob'
+            })
+            .then(response => {
+              const filename = record.name;
+
+              const url = window.URL.createObjectURL(new Blob([response.data]));
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', filename);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+
+              this.$message.success("下载成功");
+            })
+            .catch(error => {
+              if (error.response && error.response.data instanceof Blob) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  try {
+                    const errorData = JSON.parse(reader.result);
+                    this.$message.error(errorData.message || "下载失败");
+                  } catch (e) {
+                    this.$message.error("下载失败");
+                  }
+                };
+                reader.readAsText(error.response.data);
+              } else {
+                this.$message.error("下载失败");
+              }
+            });
+          },
+          showEditModal(record) {
+            const path = this.currentPath === "/" 
+              ? "/" + record.name 
+              : this.currentPath + "/" + record.name;
+
+            axios.get("/api/file/read", {
+              params: {
+                path: path
+              }
+            })
+            .then(response => {
+              if (response.data.status === "success") {
+                this.editingFile = {
+                  path: path,
+                  name: record.name
+                };
+                this.editModalVisible = true;
+                this.$nextTick(() => {
+                  if (!this.editor) {
+                    this.editor = CodeMirror(this.$refs.editor, {
+                      mode: this.getFileMode(record.name),
+                      theme: "monokai",
+                      lineNumbers: true,
+                      autofocus: true,
+                      lineWrapping: true
+                    });
+                  }
+                  this.editor.setValue(response.data.data);
+                  this.editor.refresh();
+                });
+              } else {
+                this.$message.error("此文件过大或不是文本文件，无法编辑");
+              }
+            })
+            .catch(() => {
+              this.$message.error("读取文件失败");
+            });
+          },
+          handleEdit() {
+            if (!this.editingFile) return;
+
+            const params = new URLSearchParams();
+            params.append('path', this.editingFile.path);
+            params.append('content', this.editor.getValue());
+            
+            axios.patch("/api/file/write", params, {
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            })
+            .then(response => {
+              if (response.data.status === "success") {
+                this.$message.success("保存成功");
+                this.loadFileList();
+              } else {
+                this.$message.error(response.data.message);
+              }
+            })
+            .catch(() => {
+              this.$message.error("保存失败");
+            })
+            .finally(() => {
+              this.editModalVisible = false;
+            });
+          },
+          getFileMode(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const modeMap = {
+              'js': 'javascript',
+              'json': 'javascript',
+              'html': 'xml',
+              'htm': 'xml',
+              'xml': 'xml',
+              'css': 'css',
+              'py': 'python',
+              'sh': 'shell',
+              'bash': 'shell'
+            };
+            return modeMap[ext] || 'javascript';
+          },
+        },
+        mounted() {
+          this.loadFileList();
+        },
+      });
+    </script>
+  </body>
+</html>
+{% endraw %}
