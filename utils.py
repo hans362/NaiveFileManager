@@ -1,6 +1,9 @@
 import hashlib
+import json
+import logging
 import os
 import shutil
+from datetime import datetime
 
 
 def sha256(string: str) -> str:
@@ -166,5 +169,50 @@ def create_file(path: str, type: str, base_dir: str = "/") -> bool:
         return False
 
 
+def audit_log(
+    logger: logging.Logger,
+    action: str,
+    username: str,
+    message: str = "",
+    success: bool = True,
+):
+    logger.info(json.dumps([action, username, message, success]))
+
+
+def list_logs(date: str, page: int = 1, per_page: int = 15) -> list:
+    logs = []
+    if date == datetime.now().strftime("%Y-%m-%d"):
+        date = ""
+    else:
+        date = "." + date
+    if os.path.exists(os.path.join(os.getcwd(), "data/logs", f"app.log{date}")):
+        with open(os.path.join(os.getcwd(), "data/logs", f"app.log{date}"), "r") as f:
+            lines = f.readlines()[::-1]
+            for line in lines[(page - 1) * per_page : page * per_page]:
+                line = line.strip().split(" - main - INFO - ")
+                audit_log = json.loads(line[1])
+                logs.append(
+                    {
+                        "timestamp": line[0],
+                        "action": audit_log[0],
+                        "username": audit_log[1],
+                        "message": audit_log[2],
+                        "success": audit_log[3],
+                    }
+                )
+            return {
+                "items": logs,
+                "total": len(lines),
+                "page": page,
+                "per_page": per_page,
+            }
+    return {
+        "items": [],
+        "total": 0,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
 if __name__ == "__main__":
-    pass
+    print(list_logs("2025-03-05"))

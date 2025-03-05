@@ -1,4 +1,31 @@
 {% raw %}
+handleLogout() {
+  axios
+    .post("/api/user/logout")
+    .then((response) => {
+      if (response.data.status === "success") {
+        window.location.href = "/login";
+      } else {
+        this.$message.error(response.data.message);
+      }
+    })
+    .catch(() => {
+      this.$message.error("退出登录失败");
+    });
+},
+handleMenuClick({ key }) {
+  switch (key) {
+    case "files":
+      window.location.href = "/files";
+      break;
+    case "logs":
+      window.location.href = "/logs";
+      break;
+    case "users":
+      window.location.href = "/users";
+      break;
+  }
+},
 validatePassword(password) {
   if (!password) return false;
   

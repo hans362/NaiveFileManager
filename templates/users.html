@@ -276,33 +276,6 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
           },
         });
       },
-      handleLogout() {
-        axios
-          .post("/api/user/logout")
-          .then((response) => {
-            if (response.data.status === "success") {
-              window.location.href = "/login";
-            } else {
-              this.$message.error(response.data.message);
-            }
-          })
-          .catch(() => {
-            this.$message.error("退出登录失败");
-          });
-      },
-      handleMenuClick({ key }) {
-        switch (key) {
-          case "files":
-            window.location.href = "/files";
-            break;
-          case "logs":
-            window.location.href = "/logs";
-            break;
-          case "users":
-            window.location.href = "/users";
-            break;
-        }
-      },
       handleCreate() {
         if (!this.createForm.username || !this.createForm.password || !this.createForm.base_dir) {
           this.$message.error('请填写完整信息');

@@ -1,0 +1,129 @@
+{% extends "base.html" %} {% block title %}日志审计{% endblock %} {% block
+menu_key %}logs{% endblock %} {% block content %} {% raw %}
+<a-layout-content style="margin: 16px">
+  <a-card>
+    <div style="margin-bottom: 16px">
+      <a-space>
+        <a-date-picker
+          v-model="selectedDate"
+          :default-value="moment()"
+          format="YYYY-MM-DD"
+          @change="handleDateChange"
+          style="width: 200px"
+        ></a-date-picker>
+        <a-button icon="reload" @click="loadLogs">
+          刷新
+        </a-button>
+      </a-space>
+    </div>
+    <a-table
+      :columns="columns"
+      :data-source="logList"
+      :pagination="pagination"
+      @change="handleTableChange"
+    >
+      <template slot="timestamp" slot-scope="text">
+        {{ moment(text).format("YYYY-MM-DD HH:mm:ss") }}
+      </template>
+    </a-table>
+  </a-card>
+</a-layout-content>
+{% endraw %} {% endblock %} {% block script %} {% raw %}
+<script>
+  new Vue({
+    el: "#app",
+    data() {
+      return {
+        selectedDate: moment().format("YYYY-MM-DD"),
+        logList: [],
+        pagination: {
+          current: 1,
+          pageSize: 15,
+          total: 0,
+        },
+        changePasswordVisible: false,
+        changePasswordForm: {
+          old_password: '',
+          new_password: '',
+          confirm_password: ''
+        },
+        columns: [
+          {
+            title: "时间",
+            dataIndex: "timestamp",
+            key: "timestamp",
+            width: 180,
+            scopedSlots: { customRender: "timestamp" },
+          },
+          {
+            title: "操作",
+            dataIndex: "action",
+            key: "action",
+            width: 120,
+          },
+          {
+            title: "用户",
+            dataIndex: "username",
+            key: "username",
+            width: 120,
+          },
+          {
+            title: "详细信息",
+            dataIndex: "message",
+            key: "message",
+          },
+          {
+            title: "状态",
+            dataIndex: "success",
+            key: "success",
+            width: 80,
+            customRender: (text) => {
+              return text ? "成功" : "失败";
+            },
+          },
+        ],
+      };
+    },
+    methods: {
+      loadLogs() {
+        axios
+          .get("/api/system/logs", {
+            params: {
+              date: this.selectedDate,
+              page: this.pagination.current,
+              per_page: this.pagination.pageSize,
+            },
+          })
+          .then((response) => {
+            if (response.data.status === "success") {
+              this.logList = response.data.data.items;
+              this.pagination.total = response.data.data.total;
+            } else {
+              this.logList = [];
+              this.pagination.total = 0;
+              this.$message.error(response.data.message);
+            }
+          })
+          .catch(() => {
+            this.logList = [];
+            this.pagination.total = 0;
+            this.$message.error("获取日志列表失败");
+          });
+      },
+      handleTableChange(pagination) {
+        this.pagination.current = pagination.current;
+        this.loadLogs();
+      },
+      handleDateChange(date) {
+        this.selectedDate = moment(date).format("YYYY-MM-DD");
+        this.pagination.current = 1;
+        this.loadLogs();
+      },
+      {% endraw %}{% include "common.js" %}{% raw %}
+    },
+    mounted() {
+      this.loadLogs();
+    },
+  });
+</script>
+{% endraw %} {% endblock %}
