@@ -44,3 +44,8 @@ class FileMoveForm(BaseModel):
 
 class FileDeleteForm(BaseModel):
     path: str
+
+
+class FileCreateForm(BaseModel):
+    path: str
+    type: str

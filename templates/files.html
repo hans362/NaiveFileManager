@@ -90,7 +90,7 @@
               </a-breadcrumb-item>
             </a-breadcrumb>
             <a-card>
-              <div style="margin-bottom: 16px">
+              <div style="margin-bottom: 16px; display: flex; gap: 8px">
                 <a-button-group>
                   <a-button type="primary" @click="showCreateModal('file')">
                     <a-icon type="file-add"></a-icon>
@@ -101,6 +101,10 @@
                     新建文件夹
                   </a-button>
                 </a-button-group>
+                <a-button @click="loadFileList">
+                  <a-icon type="reload"></a-icon>
+                  刷新
+                </a-button>
               </div>
               <a-table
                 :columns="columns"
@@ -119,30 +123,45 @@
                       style="margin-right: 8px"
                     ></a-icon>
                     {{ record.name }}
-                    <span v-if="record.target" style="color: #999; margin-left: 8px">
+                    <span
+                      v-if="record.target"
+                      style="color: #999; margin-left: 8px"
+                    >
                       &rarr; {{ record.target }}
                     </span>
                   </a>
                   <span v-else>
                     <a-icon type="file" style="margin-right: 8px"></a-icon>
                     {{ record.name }}
-                    <span v-if="record.target" style="color: #999; margin-left: 8px">
+                    <span
+                      v-if="record.target"
+                      style="color: #999; margin-left: 8px"
+                    >
                       &rarr; {{ record.target }}
                     </span>
                   </span>
                 </template>
                 <template slot="owner" slot-scope="text, record">
                   <span>
-                    {{ groupsMap[record.gid] || record.gid }} / {{ usersMap[record.uid] || record.uid }}
+                    {{ groupsMap[record.gid] || record.gid }} / {{
+                    usersMap[record.uid] || record.uid }}
                   </span>
                 </template>
                 <template slot="action" slot-scope="text, record">
                   <a-button-group>
-                    <a-button type="link" v-if="record.type !== 'dir'" @click="handleDownload(record)">
+                    <a-button
+                      type="link"
+                      v-if="record.type !== 'dir'"
+                      @click="handleDownload(record)"
+                    >
                       <a-icon type="download"></a-icon>
                       下载
                     </a-button>
-                    <a-button type="link" v-if="record.type !== 'dir'" @click="showEditModal(record)">
+                    <a-button
+                      type="link"
+                      v-if="record.type !== 'dir'"
+                      @click="showEditModal(record)"
+                    >
                       <a-icon type="edit"></a-icon>
                       编辑
                     </a-button>
@@ -150,7 +169,15 @@
                       <a-icon type="edit"></a-icon>
                       重命名
                     </a-button>
-                    <a-button type="link" style="color: #ff4d4f" @click="showDeleteConfirm(record)">
+                    <a-button type="link" @click="showPermissionModal(record)">
+                      <a-icon type="setting"></a-icon>
+                      权限
+                    </a-button>
+                    <a-button
+                      type="link"
+                      style="color: #ff4d4f"
+                      @click="showDeleteConfirm(record)"
+                    >
                       <a-icon type="delete"></a-icon>
                       删除
                     </a-button>
@@ -166,6 +193,8 @@
         :title="createType === 'file' ? '新建文件' : '新建文件夹'"
         @ok="handleCreate"
         @cancel="createModalVisible = false"
+        :ok-text="'确定'"
+        :cancel-text="'取消'"
       >
         <a-form-item label="名称">
           <a-input v-model="createName" placeholder="请输入名称"></a-input>
@@ -176,21 +205,62 @@
         title="重命名"
         @ok="handleRename"
         @cancel="renameModalVisible = false"
+        :ok-text="'确定'"
+        :cancel-text="'取消'"
       >
         <a-form-item label="新名称">
-          <a-input v-model="newName" :placeholder="'请输入新的名称（原名称：' + oldName + '）'"></a-input>
+          <a-input
+            v-model="newName"
+            :placeholder="'请输入新的名称（原名称：' + oldName + '）'"
+          ></a-input>
         </a-form-item>
       </a-modal>
       <a-modal
         :visible="editModalVisible"
         title="编辑文件"
-        :width="800"
+        centered
+        width="calc(100vw - 48px)"
         @ok="handleEdit"
         @cancel="editModalVisible = false"
-        :okText="'保存'"
-        :cancelText="'取消'"
+        :ok-text="'保存'"
+        :cancel-text="'取消'"
       >
-        <div ref="editor" style="border: 1px solid #d9d9d9; margin-bottom: 16px"></div>
+        <div
+          ref="editor"
+          style="height: calc(100vh - 256px); border: 1px solid #d9d9d9"
+        ></div>
+      </a-modal>
+      <a-modal
+        :visible="permissionModalVisible"
+        title="权限"
+        @ok="handlePermission"
+        @cancel="permissionModalVisible = false"
+        :ok-text="'确定'"
+        :cancel-text="'取消'"
+      >
+        <a-form-item label="权限模式">
+          <a-input-number
+            v-model="permissionMode"
+            :min="0"
+            :max="777"
+            style="width: 100%"
+            placeholder="请输入权限模式（如：644）"
+          ></a-input-number>
+        </a-form-item>
+        <a-form-item label="所有者">
+          <a-select v-model="permissionOwner" style="width: 100%" placeholder="请选择所有者">
+            <a-select-option v-for="(name, uid) in usersMap" :key="uid" :value="uid">
+              {{ name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="用户组">
+          <a-select v-model="permissionGroup" style="width: 100%" placeholder="请选择用户组">
+            <a-select-option v-for="(name, gid) in groupsMap" :key="gid" :value="gid">
+              {{ name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
       </a-modal>
     </div>
     <script>
@@ -216,6 +286,11 @@
             },
             usersMap: {},
             groupsMap: {},
+            permissionModalVisible: false,
+            permissionMode: null,
+            permissionOwner: null,
+            permissionGroup: null,
+            permissionFile: null,
             columns: [
               {
                 title: "名称",
@@ -386,37 +461,41 @@
               this.$message.error("请输入名称");
               return;
             }
-            const path = this.currentPath === "/" 
-              ? "/" + this.createName 
-              : this.currentPath + "/" + this.createName;
-            
+            const path =
+              this.currentPath === "/"
+                ? "/" + this.createName
+                : this.currentPath + "/" + this.createName;
+
             const params = new URLSearchParams();
-            params.append('path', path);
-            params.append('type', this.createType);
-            
-            axios.post("/api/file/create", params, {
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-              }
-            })
-            .then(response => {
-              if (response.data.status === "success") {
-                this.$message.success(
-                  this.createType === "file" ? "文件创建成功" : "文件夹创建成功"
+            params.append("path", path);
+            params.append("type", this.createType);
+
+            axios
+              .post("/api/file/create", params, {
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+              })
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.$message.success(
+                    this.createType === "file"
+                      ? "文件创建成功"
+                      : "文件夹创建成功"
+                  );
+                  this.loadFileList();
+                } else {
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch(() => {
+                this.$message.error(
+                  this.createType === "file" ? "文件创建失败" : "文件夹创建失败"
                 );
-                this.loadFileList();
-              } else {
-                this.$message.error(response.data.message);
-              }
-            })
-            .catch(() => {
-              this.$message.error(
-                this.createType === "file" ? "文件创建失败" : "文件夹创建失败"
-              );
-            })
-            .finally(() => {
-              this.createModalVisible = false;
-            });
+              })
+              .finally(() => {
+                this.createModalVisible = false;
+              });
           },
           showRenameModal(record) {
             this.oldName = record.name;
@@ -434,193 +513,256 @@
               return;
             }
 
-            const sourcePath = this.currentPath === "/" 
-              ? "/" + this.oldName 
-              : this.currentPath + "/" + this.oldName;
-            const destPath = this.currentPath === "/" 
-              ? "/" + this.newName 
-              : this.currentPath + "/" + this.newName;
+            const sourcePath =
+              this.currentPath === "/"
+                ? "/" + this.oldName
+                : this.currentPath + "/" + this.oldName;
+            const destPath =
+              this.currentPath === "/"
+                ? "/" + this.newName
+                : this.currentPath + "/" + this.newName;
 
             const params = new URLSearchParams();
-            params.append('source', sourcePath);
-            params.append('destination', destPath);
+            params.append("source", sourcePath);
+            params.append("destination", destPath);
 
-            axios.patch("/api/file/move", params, {
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-              }
-            })
-            .then(response => {
-              if (response.data.status === "success") {
-                this.$message.success("重命名成功");
-                this.loadFileList();
-              } else {
-                this.$message.error(response.data.message);
-              }
-            })
-            .catch(() => {
-              this.$message.error("重命名失败");
-            })
-            .finally(() => {
-              this.renameModalVisible = false;
-            });
+            axios
+              .patch("/api/file/move", params, {
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+              })
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.$message.success("重命名成功");
+                  this.loadFileList();
+                } else {
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch(() => {
+                this.$message.error("重命名失败");
+              })
+              .finally(() => {
+                this.renameModalVisible = false;
+              });
           },
           showDeleteConfirm(record) {
-            const path = this.currentPath === "/" 
-              ? "/" + record.name 
-              : this.currentPath + "/" + record.name;
-            
+            const path =
+              this.currentPath === "/"
+                ? "/" + record.name
+                : this.currentPath + "/" + record.name;
+
             this.$confirm({
               title: "确认删除",
-              content: `确定要删除${record.type === 'dir' ? '文件夹' : '文件'} "${record.name}" 吗？`,
+              content: `确定要删除${
+                record.type === "dir" ? "文件夹" : "文件"
+              } "${record.name}" 吗？`,
               okText: "确认",
               okType: "danger",
               cancelText: "取消",
               onOk: () => {
                 const params = new URLSearchParams();
-                params.append('path', path);
+                params.append("path", path);
 
-                axios.delete("/api/file/delete", {
-                  data: params,
-                  headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                  }
-                })
-                .then(response => {
-                  if (response.data.status === "success") {
-                    this.$message.success("删除成功");
-                    this.loadFileList();
-                  } else {
-                    this.$message.error(response.data.message);
-                  }
-                })
-                .catch(() => {
-                  this.$message.error("删除失败");
-                });
-              }
+                axios
+                  .delete("/api/file/delete", {
+                    data: params,
+                    headers: {
+                      "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                  })
+                  .then((response) => {
+                    if (response.data.status === "success") {
+                      this.$message.success("删除成功");
+                      this.loadFileList();
+                    } else {
+                      this.$message.error(response.data.message);
+                    }
+                  })
+                  .catch(() => {
+                    this.$message.error("删除失败");
+                  });
+              },
             });
           },
           handleDownload(record) {
-            const path = this.currentPath === "/" 
-              ? "/" + record.name 
-              : this.currentPath + "/" + record.name;
-            
-            axios.get("/api/file/download", {
-              params: {
-                path: path
-              },
-              responseType: 'blob'
-            })
-            .then(response => {
-              const filename = record.name;
+            const path =
+              this.currentPath === "/"
+                ? "/" + record.name
+                : this.currentPath + "/" + record.name;
 
-              const url = window.URL.createObjectURL(new Blob([response.data]));
-              const link = document.createElement('a');
-              link.href = url;
-              link.setAttribute('download', filename);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              window.URL.revokeObjectURL(url);
+            axios
+              .get("/api/file/download", {
+                params: {
+                  path: path,
+                },
+                responseType: "blob",
+              })
+              .then((response) => {
+                const filename = record.name;
 
-              this.$message.success("下载成功");
-            })
-            .catch(error => {
-              if (error.response && error.response.data instanceof Blob) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  try {
-                    const errorData = JSON.parse(reader.result);
-                    this.$message.error(errorData.message || "下载失败");
-                  } catch (e) {
-                    this.$message.error("下载失败");
-                  }
-                };
-                reader.readAsText(error.response.data);
-              } else {
-                this.$message.error("下载失败");
-              }
-            });
+                const url = window.URL.createObjectURL(
+                  new Blob([response.data])
+                );
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", filename);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                this.$message.success("下载成功");
+              })
+              .catch((error) => {
+                if (error.response && error.response.data instanceof Blob) {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    try {
+                      const errorData = JSON.parse(reader.result);
+                      this.$message.error(errorData.message || "下载失败");
+                    } catch (e) {
+                      this.$message.error("下载失败");
+                    }
+                  };
+                  reader.readAsText(error.response.data);
+                } else {
+                  this.$message.error("下载失败");
+                }
+              });
           },
           showEditModal(record) {
-            const path = this.currentPath === "/" 
-              ? "/" + record.name 
-              : this.currentPath + "/" + record.name;
+            const path =
+              this.currentPath === "/"
+                ? "/" + record.name
+                : this.currentPath + "/" + record.name;
 
-            axios.get("/api/file/read", {
-              params: {
-                path: path
-              }
-            })
-            .then(response => {
-              if (response.data.status === "success") {
-                this.editingFile = {
+            axios
+              .get("/api/file/read", {
+                params: {
                   path: path,
-                  name: record.name
-                };
-                this.editModalVisible = true;
-                this.$nextTick(() => {
-                  if (!this.editor) {
-                    this.editor = CodeMirror(this.$refs.editor, {
-                      mode: this.getFileMode(record.name),
-                      theme: "monokai",
-                      lineNumbers: true,
-                      autofocus: true,
-                      lineWrapping: true
-                    });
-                  }
-                  this.editor.setValue(response.data.data);
-                  this.editor.refresh();
-                });
-              } else {
-                this.$message.error("此文件过大或不是文本文件，无法编辑");
-              }
-            })
-            .catch(() => {
-              this.$message.error("读取文件失败");
-            });
+                },
+              })
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.editingFile = {
+                    path: path,
+                    name: record.name,
+                  };
+                  this.editModalVisible = true;
+                  this.$nextTick(() => {
+                    if (!this.editor) {
+                      this.editor = CodeMirror(this.$refs.editor, {
+                        mode: this.getFileMode(record.name),
+                        theme: "monokai",
+                        lineNumbers: true,
+                        autofocus: true,
+                      });
+                      this.editor.setSize("100%", "100%");
+                    }
+                    this.editor.setValue(response.data.data);
+                    this.editor.refresh();
+                  });
+                } else {
+                  this.$message.error("此文件过大或不是文本文件，无法编辑");
+                }
+              })
+              .catch(() => {
+                this.$message.error("读取文件失败");
+              });
           },
           handleEdit() {
             if (!this.editingFile) return;
 
             const params = new URLSearchParams();
-            params.append('path', this.editingFile.path);
-            params.append('content', this.editor.getValue());
-            
-            axios.patch("/api/file/write", params, {
+            params.append("path", this.editingFile.path);
+            params.append("content", this.editor.getValue());
+
+            axios
+              .patch("/api/file/write", params, {
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+              })
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.$message.success("保存成功");
+                  this.loadFileList();
+                } else {
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch(() => {
+                this.$message.error("保存失败");
+              })
+              .finally(() => {
+                this.editModalVisible = false;
+              });
+          },
+          getFileMode(filename) {
+            const ext = filename.split(".").pop().toLowerCase();
+            const modeMap = {
+              js: "javascript",
+              json: "javascript",
+              html: "xml",
+              htm: "xml",
+              xml: "xml",
+              css: "css",
+              py: "python",
+              sh: "shell",
+              bash: "shell",
+            };
+            return modeMap[ext] || "javascript";
+          },
+          showPermissionModal(record) {
+            Promise.all([this.loadUsers(), this.loadGroups()])
+              .then(() => {
+                this.permissionFile = record;
+                this.permissionMode = record.permission;
+                this.permissionOwner = record.uid.toString();
+                this.permissionGroup = record.gid.toString();
+                this.permissionModalVisible = true;
+              })
+              .catch(() => {
+                this.$message.error("加载用户和组信息失败");
+              });
+          },
+          handlePermission() {
+            if (!this.permissionFile || !this.permissionMode) {
+              this.$message.error("请填写完整的权限信息");
+              return;
+            }
+
+            const path = this.currentPath === "/" 
+              ? "/" + this.permissionFile.name 
+              : this.currentPath + "/" + this.permissionFile.name;
+
+            const params = new URLSearchParams();
+            params.append("path", path);
+            params.append("mode", parseInt(this.permissionMode, 8).toString(10));
+            params.append("owner", this.permissionOwner);
+            params.append("group", this.permissionGroup);
+
+            axios.patch("/api/file/permission", params, {
               headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                "Content-Type": "application/x-www-form-urlencoded",
               }
             })
             .then(response => {
               if (response.data.status === "success") {
-                this.$message.success("保存成功");
+                this.$message.success("权限设置成功");
                 this.loadFileList();
               } else {
                 this.$message.error(response.data.message);
               }
             })
             .catch(() => {
-              this.$message.error("保存失败");
+              this.$message.error("权限设置失败");
             })
             .finally(() => {
-              this.editModalVisible = false;
+              this.permissionModalVisible = false;
             });
-          },
-          getFileMode(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            const modeMap = {
-              'js': 'javascript',
-              'json': 'javascript',
-              'html': 'xml',
-              'htm': 'xml',
-              'xml': 'xml',
-              'css': 'css',
-              'py': 'python',
-              'sh': 'shell',
-              'bash': 'shell'
-            };
-            return modeMap[ext] || 'javascript';
           },
         },
         mounted() {

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from forms import (
+    FileCreateForm,
     FileDeleteForm,
     FileMoveForm,
     FilePermissionForm,
@@ -221,9 +222,9 @@ def file_delete(request: Request, data: Annotated[FileDeleteForm, Form()]):
 
 
 @api.post("/file/create", dependencies=[Depends(User.is_authenticated)])
-def file_create(request: Request, path: str, type: str):
+def file_create(request: Request, data: Annotated[FileCreateForm, Form()]):
     base_dir = User.load(request.session.get("uid")).base_dir
-    if create_file(path, type, base_dir):
+    if create_file(data.path, data.type, base_dir):
         return {"status": "success", "message": "Create success."}
     return {"status": "failed", "message": "Create failed."}
 
