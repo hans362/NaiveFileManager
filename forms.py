@@ -24,6 +24,11 @@ class UserDeleteForm(BaseModel):
     username: str
 
 
+class UserPasswordForm(BaseModel):
+    old_password: str
+    new_password: str
+
+
 class FileWriteForm(BaseModel):
     path: str
     content: str

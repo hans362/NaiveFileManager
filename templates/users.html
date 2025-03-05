@@ -1,0 +1,389 @@
+{% extends "base.html" %} {% block title %}用户管理{% endblock %} {% block
+menu_key %}users{% endblock %} {% block content %} {% raw %}
+<a-layout-content style="margin: 16px">
+  <a-card>
+    <div style="margin-bottom: 16px">
+      <a-button type="primary" @click="showCreateModal">
+        <a-icon type="user-add"></a-icon>
+        新建用户
+      </a-button>
+    </div>
+    <a-table
+      :columns="columns"
+      :data-source="userList"
+      :pagination="pagination"
+      @change="handleTableChange"
+    >
+      <template slot="action" slot-scope="text, record">
+        <a-button-group>
+          <a-button type="link" @click="showEditModal(record)">
+            <a-icon type="edit"></a-icon>
+            编辑
+          </a-button>
+          <a-button
+            type="link"
+            style="color: #ff4d4f"
+            @click="showDeleteConfirm(record)"
+          >
+            <a-icon type="delete"></a-icon>
+            删除
+          </a-button>
+        </a-button-group>
+      </template>
+    </a-table>
+  </a-card>
+</a-layout-content>
+{% endraw %} {% endblock %} {% block modal %} {% raw %}
+<a-modal
+  :visible="createModalVisible"
+  title="新建用户"
+  @ok="handleCreate"
+  @cancel="createModalVisible = false"
+  :ok-text="'确定'"
+  :cancel-text="'取消'"
+>
+  <a-form-item label="用户名">
+    <a-input v-model="createForm.username" placeholder="请输入用户名"></a-input>
+  </a-form-item>
+  <a-form-item label="密码">
+    <a-input-password
+      v-model="createForm.password"
+      placeholder="请输入密码"
+    ></a-input-password>
+    <div style="color: #999; font-size: 12px; margin-top: 4px">
+      密码要求：长度至少12位，必须包含大小写字母、数字和特殊字符
+    </div>
+  </a-form-item>
+  <a-form-item label="基础目录">
+    <a-input
+      v-model="createForm.base_dir"
+      placeholder="请输入基础目录"
+    ></a-input>
+  </a-form-item>
+  <a-form-item label="角色">
+    <a-select
+      v-model="createForm.role"
+      placeholder="请选择角色"
+      style="width: 30%"
+    >
+      <a-select-option value="admin">管理员</a-select-option>
+      <a-select-option value="user">普通用户</a-select-option>
+    </a-select>
+  </a-form-item>
+</a-modal>
+
+<a-modal
+  :visible="editModalVisible"
+  title="编辑用户"
+  @ok="handleEdit"
+  @cancel="editModalVisible = false"
+  :ok-text="'确定'"
+  :cancel-text="'取消'"
+>
+  <a-form-item label="用户名">
+    <a-input v-model="editForm.username" disabled></a-input>
+  </a-form-item>
+  <a-form-item label="密码">
+    <a-input-password
+      v-model="editForm.password"
+      placeholder="不修改请留空"
+    ></a-input-password>
+    <div style="color: #999; font-size: 12px; margin-top: 4px">
+      密码要求：长度至少12位，必须包含大小写字母、数字和特殊字符（不修改请留空）
+    </div>
+  </a-form-item>
+  <a-form-item label="基础目录">
+    <a-input v-model="editForm.base_dir" placeholder="请输入基础目录"></a-input>
+  </a-form-item>
+  <a-form-item label="角色">
+    <a-select
+      v-model="editForm.role"
+      placeholder="请选择角色"
+      style="width: 30%"
+    >
+      <a-select-option value="admin">管理员</a-select-option>
+      <a-select-option value="user">普通用户</a-select-option>
+    </a-select>
+  </a-form-item>
+</a-modal>
+
+<a-modal
+  :visible="changePasswordVisible"
+  title="修改密码"
+  @ok="handleChangePassword"
+  @cancel="changePasswordVisible = false"
+  :ok-text="'确定'"
+  :cancel-text="'取消'"
+>
+  <a-form-item label="旧密码">
+    <a-input
+      v-model="changePasswordForm.old_password"
+      placeholder="请输入旧密码"
+    ></a-input>
+  </a-form-item>
+  <a-form-item label="新密码">
+    <a-input
+      v-model="changePasswordForm.new_password"
+      placeholder="请输入新密码"
+    ></a-input>
+  </a-form-item>
+  <a-form-item label="确认密码">
+    <a-input
+      v-model="changePasswordForm.confirm_password"
+      placeholder="请确认新密码"
+    ></a-input>
+  </a-form-item>
+</a-modal>
+{% endraw %} {% endblock %} {% block script %} {% raw %}
+<script>
+  new Vue({
+    el: "#app",
+    data() {
+      return {
+        createModalVisible: false,
+        editModalVisible: false,
+        editForm: {
+          username: '',
+          password: '',
+          base_dir: '',
+          role: 'user'
+        },
+        changePasswordVisible: false,
+        changePasswordForm: {
+          old_password: '',
+          new_password: '',
+          confirm_password: ''
+        },
+        userList: [],
+        createForm: {
+          username: '',
+          password: '',
+          base_dir: '',
+          role: 'user'
+        },
+        pagination: {
+          current: 1,
+          pageSize: 15,
+          total: 0,
+        },
+        columns: [
+          {
+            title: "用户名",
+            dataIndex: "username",
+            key: "username",
+          },
+          {
+            title: "基础目录",
+            dataIndex: "base_dir",
+            key: "base_dir",
+          },
+          {
+            title: "角色",
+            dataIndex: "role",
+            key: "role",
+            customRender: (text) => {
+              return text === 'admin' ? '管理员' : '普通用户';
+            }
+          },
+          {
+            title: "操作",
+            key: "action",
+            scopedSlots: { customRender: "action" },
+          },
+        ],
+      };
+    },
+    methods: {
+      loadUserList() {
+        axios
+          .get("/api/user/list", {
+            params: {
+              page: this.pagination.current,
+              per_page: this.pagination.pageSize,
+            },
+          })
+          .then((response) => {
+            if (response.data.status === "success") {
+              this.userList = response.data.data.items;
+              this.pagination.total = response.data.data.total;
+            } else {
+              this.userList = [];
+              this.pagination.total = 0;
+              this.$message.error(response.data.message);
+            }
+          })
+          .catch(() => {
+            this.userList = [];
+            this.pagination.total = 0;
+            this.$message.error("获取用户列表失败");
+          });
+      },
+      handleTableChange(pagination) {
+        this.pagination.current = pagination.current;
+        this.loadUserList();
+      },
+      showCreateModal() {
+        this.createForm = {
+          username: '',
+          password: '',
+          base_dir: '',
+          role: 'user'
+        };
+        this.createModalVisible = true;
+      },
+      showEditModal(record) {
+        this.editForm = {
+          ...record,
+          password: '' // 清空密码字段
+        };
+        this.editModalVisible = true;
+      },
+      showDeleteConfirm(record) {
+        // 检查是否为当前用户
+        if (record.is_current_user) {
+          this.$message.warning('不能删除当前登录用户');
+          return;
+        }
+
+        this.$confirm({
+          title: "确认删除",
+          content: `确定要删除用户 "${record.username}" 吗？`,
+          okText: "确认",
+          okType: "danger",
+          cancelText: "取消",
+          onOk: () => {
+            const params = new URLSearchParams();
+            params.append("username", record.username);
+
+            axios
+              .delete("/api/user/delete", {
+                data: params,
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                },
+              })
+              .then((response) => {
+                if (response.data.status === "success") {
+                  this.$message.success("删除成功");
+                  this.loadUserList();
+                } else {
+                  this.$message.error(response.data.message);
+                }
+              })
+              .catch(() => {
+                this.$message.error("删除失败");
+              });
+          },
+        });
+      },
+      handleLogout() {
+        axios
+          .post("/api/user/logout")
+          .then((response) => {
+            if (response.data.status === "success") {
+              window.location.href = "/login";
+            } else {
+              this.$message.error(response.data.message);
+            }
+          })
+          .catch(() => {
+            this.$message.error("退出登录失败");
+          });
+      },
+      handleMenuClick({ key }) {
+        switch (key) {
+          case "files":
+            window.location.href = "/files";
+            break;
+          case "logs":
+            window.location.href = "/logs";
+            break;
+          case "users":
+            window.location.href = "/users";
+            break;
+        }
+      },
+      handleCreate() {
+        if (!this.createForm.username || !this.createForm.password || !this.createForm.base_dir) {
+          this.$message.error('请填写完整信息');
+          return;
+        }
+
+        const passwordValidation = this.validatePassword(this.createForm.password);
+        if (passwordValidation !== true) {
+          this.$message.error(passwordValidation);
+          return;
+        }
+
+        const params = new URLSearchParams();
+        params.append('username', this.createForm.username);
+        params.append('password', this.createForm.password);
+        params.append('base_dir', this.createForm.base_dir);
+        params.append('role', this.createForm.role);
+
+        axios.put('/api/user/create', params, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        })
+        .then(response => {
+          if (response.data.status === 'success') {
+            this.$message.success('创建成功');
+            this.loadUserList();
+            this.createModalVisible = false;
+          } else {
+            this.$message.error(response.data.message);
+          }
+        })
+        .catch(() => {
+          this.$message.error('创建失败');
+        });
+      },
+      handleEdit() {
+        if (!this.editForm.username || !this.editForm.base_dir) {
+          this.$message.error('请填写完整信息');
+          return;
+        }
+
+        if (this.editForm.password) {
+          const passwordValidation = this.validatePassword(this.editForm.password);
+          if (passwordValidation !== true) {
+            this.$message.error(passwordValidation);
+            return;
+          }
+        }
+
+        const params = new URLSearchParams();
+        params.append('username', this.editForm.username);
+        if (this.editForm.password) {
+          params.append('password', this.editForm.password);
+        }
+        params.append('base_dir', this.editForm.base_dir);
+        params.append('role', this.editForm.role);
+
+        axios.patch('/api/user/update', params, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        })
+        .then(response => {
+          if (response.data.status === 'success') {
+            this.$message.success('更新成功');
+            this.loadUserList();
+            this.editModalVisible = false;
+          } else {
+            this.$message.error(response.data.message);
+          }
+        })
+        .catch(() => {
+          this.$message.error('更新失败');
+        });
+      },
+      {% endraw %}{% include "common.js" %}{% raw %}
+    },
+    mounted() {
+      this.loadUserList();
+    },
+  });
+</script>
+{% endraw %} {% endblock %}

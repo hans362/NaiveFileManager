@@ -16,6 +16,7 @@ from forms import (
     UserCreateForm,
     UserDeleteForm,
     UserLoginForm,
+    UserPasswordForm,
     UserUpdateForm,
 )
 from models import AbstractModel, User
@@ -79,7 +80,36 @@ def login(request: Request):
 def files(request: Request):
     try:
         User.is_authenticated(request)
-        return templates.TemplateResponse("files.html", {"request": request})
+        return templates.TemplateResponse(
+            "files.html",
+            {"request": request, "user": User.load(request.session.get("uid"))},
+        )
+    except Exception:
+        return RedirectResponse("/")
+
+
+@app.get("/users")
+def users(request: Request):
+    try:
+        User.is_authenticated(request)
+        User.is_admin(request)
+        return templates.TemplateResponse(
+            "users.html",
+            {"request": request, "user": User.load(request.session.get("uid"))},
+        )
+    except Exception:
+        return RedirectResponse("/")
+
+
+@app.get("/logs")
+def logs(request: Request):
+    try:
+        User.is_authenticated(request)
+        User.is_admin(request)
+        return templates.TemplateResponse(
+            "logs.html",
+            {"request": request, "user": User.load(request.session.get("uid"))},
+        )
     except Exception:
         return RedirectResponse("/")
 
@@ -107,13 +137,18 @@ def user_logout(request: Request):
 @api.get(
     "/user/list", dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)]
 )
-def user_list(page: int = 1, per_page: int = 15):
+def user_list(request: Request, page: int = 1, per_page: int = 15):
     data = User.list(page, per_page)
     return {
         "status": "success",
         "data": {
             "items": [
-                {"username": user.username, "base_dir": user.base_dir}
+                {
+                    "username": user.username,
+                    "base_dir": user.base_dir,
+                    "role": user.role,
+                    "is_current_user": user.id == request.session.get("uid"),
+                }
                 for user in data["items"]
             ],
             "total": data["total"],
@@ -157,12 +192,29 @@ def user_update(data: Annotated[UserUpdateForm, Form()]):
     "/user/delete",
     dependencies=[Depends(User.is_authenticated), Depends(User.is_admin)],
 )
-def user_delete(data: Annotated[UserDeleteForm, Form()]):
+def user_delete(request: Request, data: Annotated[UserDeleteForm, Form()]):
     user = User.load(sha256(data.username))
     if not user:
         return {"status": "failed", "message": "User does not exist."}
+    if user.id == request.session.get("uid"):
+        return {"status": "failed", "message": "Cannot delete current user."}
     user.delete()
     return {"status": "success", "message": "User deleted."}
+
+
+@api.patch(
+    "/user/password",
+    dependencies=[Depends(User.is_authenticated)],
+)
+def user_password(request: Request, data: Annotated[UserPasswordForm, Form()]):
+    user = User.load(request.session.get("uid"))
+    if not user:
+        return {"status": "failed", "message": "User does not exist."}
+    if not User.verify_password(data.old_password, user.password):
+        return {"status": "failed", "message": "Old password is incorrect."}
+    user.password = User.hash_password(data.new_password)
+    user.save()
+    return {"status": "success", "message": "Password updated."}
 
 
 @api.get("/file/list", dependencies=[Depends(User.is_authenticated)])
