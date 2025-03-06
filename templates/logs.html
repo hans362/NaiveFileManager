@@ -11,9 +11,7 @@ menu_key %}logs{% endblock %} {% block content %} {% raw %}
           @change="handleDateChange"
           style="width: 200px"
         ></a-date-picker>
-        <a-button icon="reload" @click="loadLogs">
-          刷新
-        </a-button>
+        <a-button icon="reload" @click="loadLogs"> 刷新 </a-button>
       </a-space>
     </div>
     <a-table
@@ -24,6 +22,11 @@ menu_key %}logs{% endblock %} {% block content %} {% raw %}
     >
       <template slot="timestamp" slot-scope="text">
         {{ moment(text).format("YYYY-MM-DD HH:mm:ss") }}
+      </template>
+      <template slot="status" slot-scope="text">
+        <a-tag :color="text ? 'green' : 'red'">
+          {{ text ? '成功' : '失败' }}
+        </a-tag>
       </template>
     </a-table>
   </a-card>
@@ -77,9 +80,7 @@ menu_key %}logs{% endblock %} {% block content %} {% raw %}
             dataIndex: "success",
             key: "success",
             width: 80,
-            customRender: (text) => {
-              return text ? "成功" : "失败";
-            },
+            scopedSlots: { customRender: "status" },
           },
         ],
       };

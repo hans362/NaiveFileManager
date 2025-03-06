@@ -148,13 +148,37 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
   :cancel-text="'取消'"
 >
   <a-form-item label="权限模式">
-    <a-input-number
-      v-model="permissionMode"
-      :min="0"
-      :max="777"
-      style="width: 100%"
-      placeholder="请输入权限模式（如：644）"
-    ></a-input-number>
+    <div style="border: 1px solid #d9d9d9; padding: 16px; border-radius: 2px">
+      <table style="width: 100%; text-align: center">
+        <tr>
+          <th style="width: 25%"></th>
+          <th style="width: 25%">读取 (4)</th>
+          <th style="width: 25%">写入 (2)</th>
+          <th style="width: 25%">执行 (1)</th>
+        </tr>
+        <tr>
+          <td>所有者</td>
+          <td><a-checkbox v-model="permissions.owner.read"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.owner.write"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.owner.execute"></a-checkbox></td>
+        </tr>
+        <tr>
+          <td>用户组</td>
+          <td><a-checkbox v-model="permissions.group.read"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.group.write"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.group.execute"></a-checkbox></td>
+        </tr>
+        <tr>
+          <td>其他人</td>
+          <td><a-checkbox v-model="permissions.other.read"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.other.write"></a-checkbox></td>
+          <td><a-checkbox v-model="permissions.other.execute"></a-checkbox></td>
+        </tr>
+      </table>
+      <div style="margin-top: 8px; color: #999; text-align: right">
+        权限值：{{ permissionMode }}
+      </div>
+    </div>
   </a-form-item>
   <a-form-item label="所有者">
     <a-select
@@ -204,7 +228,23 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         usersMap: {},
         groupsMap: {},
         permissionModalVisible: false,
-        permissionMode: null,
+        permissions: {
+          owner: {
+            read: false,
+            write: false,
+            execute: false,
+          },
+          group: {
+            read: false,
+            write: false,
+            execute: false,
+          },
+          other: {
+            read: false,
+            write: false,
+            execute: false,
+          },
+        },
         permissionOwner: null,
         permissionGroup: null,
         permissionFile: null,
@@ -269,6 +309,15 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           });
         }
         return paths;
+      },
+      permissionMode() {
+        const getNum = (perm) => {
+          return (perm.read ? 4 : 0) + (perm.write ? 2 : 0) + (perm.execute ? 1 : 0);
+        };
+        const owner = getNum(this.permissions.owner);
+        const group = getNum(this.permissions.group);
+        const other = getNum(this.permissions.other);
+        return `${owner}${group}${other}`;
       },
     },
     methods: {
@@ -610,7 +659,23 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         Promise.all([this.loadUsers(), this.loadGroups()])
           .then(() => {
             this.permissionFile = record;
-            this.permissionMode = record.permission;
+            const mode = record.permission;
+            const owner = parseInt(mode[0]);
+            const group = parseInt(mode[1]);
+            const other = parseInt(mode[2]);
+
+            const setBits = (num) => ({
+              read: !!(num & 4),
+              write: !!(num & 2),
+              execute: !!(num & 1),
+            });
+
+            this.permissions = {
+              owner: setBits(owner),
+              group: setBits(group),
+              other: setBits(other),
+            };
+
             this.permissionOwner = record.uid.toString();
             this.permissionGroup = record.gid.toString();
             this.permissionModalVisible = true;

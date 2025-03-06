@@ -36,6 +36,7 @@ from utils import (
     read_file,
     sanitize_path,
     sha256,
+    validate_password,
     write_file,
 )
 
@@ -134,7 +135,7 @@ def logs(request: Request):
 
 @api.get("/")
 def status():
-    return {"status": "success", "message": "NaiveFileManagerAPI is running."}
+    return {"status": "success", "message": "NaiveFileManager API 运行正常"}
 
 
 @api.post("/user/login")
@@ -143,15 +144,15 @@ def user_login(request: Request, data: Annotated[UserLoginForm, Form()]):
     if user and User.verify_password(data.password, user.password):
         request.session["uid"] = user.id
         audit_log(logger, "用户登录", user.username)
-        return {"status": "success", "message": "Login success."}
-    return {"status": "failed", "message": "Login failed."}
+        return {"status": "success", "message": "登录成功"}
+    return {"status": "failed", "message": "用户名或密码错误"}
 
 
 @api.post("/user/logout", dependencies=[Depends(User.is_authenticated)])
 def user_logout(request: Request):
     audit_log(logger, "用户登出", User.load(request.session.get("uid")).username)
     request.session.clear()
-    return {"status": "success", "message": "Logout success."}
+    return {"status": "success", "message": "退出登录成功"}
 
 
 @api.get(
@@ -186,7 +187,24 @@ def user_list(request: Request, page: int = 1, per_page: int = 15):
 def user_create(request: Request, data: Annotated[UserCreateForm, Form()]):
     user = User.load(sha256(data.username))
     if user:
-        return {"status": "failed", "message": "User already exists."}
+        audit_log(
+            logger,
+            "创建用户",
+            User.load(request.session.get("uid")).username,
+            f"创建新用户 {data.username}",
+            False,
+        )
+        return {"status": "failed", "message": "用户已存在"}
+    validation = validate_password(data.password)
+    if validation is not True:
+        audit_log(
+            logger,
+            "创建用户",
+            User.load(request.session.get("uid")).username,
+            f"创建新用户 {data.username}",
+            False,
+        )
+        return {"status": "failed", "message": validation}
     User(
         data.username, User.hash_password(data.password), data.base_dir, data.role
     ).save()
@@ -196,7 +214,7 @@ def user_create(request: Request, data: Annotated[UserCreateForm, Form()]):
         User.load(request.session.get("uid")).username,
         f"创建新用户 {data.username}",
     )
-    return {"status": "success", "message": "User created."}
+    return {"status": "success", "message": "用户创建成功"}
 
 
 @api.patch(
@@ -206,8 +224,25 @@ def user_create(request: Request, data: Annotated[UserCreateForm, Form()]):
 def user_update(request: Request, data: Annotated[UserUpdateForm, Form()]):
     user = User.load(sha256(data.username))
     if not user:
-        return {"status": "failed", "message": "User does not exist."}
+        audit_log(
+            logger,
+            "更新用户",
+            User.load(request.session.get("uid")).username,
+            f"更新用户 {data.username}",
+            False,
+        )
+        return {"status": "failed", "message": "用户不存在"}
     if data.password:
+        validation = validate_password(data.password)
+        if validation is not True:
+            audit_log(
+                logger,
+                "更新用户",
+                User.load(request.session.get("uid")).username,
+                f"更新用户 {data.username}",
+                False,
+            )
+            return {"status": "failed", "message": validation}
         user.password = User.hash_password(data.password)
     user.base_dir = data.base_dir
     user.role = data.role
@@ -218,7 +253,7 @@ def user_update(request: Request, data: Annotated[UserUpdateForm, Form()]):
         User.load(request.session.get("uid")).username,
         f"更新用户 {data.username}",
     )
-    return {"status": "success", "message": "User updated."}
+    return {"status": "success", "message": "用户更新成功"}
 
 
 @api.delete(
@@ -228,9 +263,23 @@ def user_update(request: Request, data: Annotated[UserUpdateForm, Form()]):
 def user_delete(request: Request, data: Annotated[UserDeleteForm, Form()]):
     user = User.load(sha256(data.username))
     if not user:
-        return {"status": "failed", "message": "User does not exist."}
+        audit_log(
+            logger,
+            "删除用户",
+            User.load(request.session.get("uid")).username,
+            f"删除用户 {data.username}",
+            False,
+        )
+        return {"status": "failed", "message": "用户不存在"}
     if user.id == request.session.get("uid"):
-        return {"status": "failed", "message": "Cannot delete current user."}
+        audit_log(
+            logger,
+            "删除用户",
+            User.load(request.session.get("uid")).username,
+            f"删除用户 {data.username}",
+            False,
+        )
+        return {"status": "failed", "message": "不能删除当前用户"}
     user.delete()
     audit_log(
         logger,
@@ -238,7 +287,7 @@ def user_delete(request: Request, data: Annotated[UserDeleteForm, Form()]):
         User.load(request.session.get("uid")).username,
         f"删除用户 {data.username}",
     )
-    return {"status": "success", "message": "User deleted."}
+    return {"status": "success", "message": "用户删除成功"}
 
 
 @api.patch(
@@ -248,29 +297,59 @@ def user_delete(request: Request, data: Annotated[UserDeleteForm, Form()]):
 def user_password(request: Request, data: Annotated[UserPasswordForm, Form()]):
     user = User.load(request.session.get("uid"))
     if not user:
-        return {"status": "failed", "message": "User does not exist."}
+        return {"status": "failed", "message": "用户不存在"}
     if not User.verify_password(data.old_password, user.password):
-        return {"status": "failed", "message": "Old password is incorrect."}
+        audit_log(
+            logger,
+            "修改密码",
+            user.username,
+            False,
+        )
+        return {"status": "failed", "message": "当前密码错误"}
+    validation = validate_password(data.new_password)
+    if validation is not True:
+        audit_log(
+            logger,
+            "修改密码",
+            user.username,
+            False,
+        )
+        return {"status": "failed", "message": validation}
     user.password = User.hash_password(data.new_password)
     user.save()
     audit_log(
         logger,
         "修改密码",
-        User.load(request.session.get("uid")).username,
+        user.username,
     )
-    return {"status": "success", "message": "Password updated."}
+    return {"status": "success", "message": "密码修改成功"}
 
 
 @api.get("/file/list", dependencies=[Depends(User.is_authenticated)])
-def file_list(request: Request, path: str, page: int = 1, per_page: int = 15):
-    base_dir = User.load(request.session.get("uid")).base_dir
-    audit_log(
-        logger,
-        "查看文件列表",
-        User.load(request.session.get("uid")).username,
-        f"查看 {sanitize_path(path, base_dir)}",
-    )
-    return {"status": "success", "data": list_files(path, base_dir, page, per_page)}
+def file_list(
+    request: Request, path: str, page: int = 1, per_page: int = 15, admin: bool = False
+):
+    if admin and User.load(request.session.get("uid")).role == "admin":
+        base_dir = "/"
+    else:
+        base_dir = User.load(request.session.get("uid")).base_dir
+    try:
+        audit_log(
+            logger,
+            "查看文件列表",
+            User.load(request.session.get("uid")).username,
+            f"查看 {sanitize_path(path, base_dir)}",
+        )
+        return {"status": "success", "data": list_files(path, base_dir, page, per_page)}
+    except Exception:
+        audit_log(
+            logger,
+            "查看文件列表",
+            User.load(request.session.get("uid")).username,
+            f"查看 {sanitize_path(path, base_dir)}",
+            False,
+        )
+        return {"status": "failed", "message": "文件列表获取失败"}
 
 
 @api.get("/file/download", dependencies=[Depends(User.is_authenticated)])
@@ -278,6 +357,13 @@ def file_download(request: Request, path: str):
     base_dir = User.load(request.session.get("uid")).base_dir
     path = sanitize_path(path, base_dir)
     if not os.path.exists(path) or os.path.isdir(path):
+        audit_log(
+            logger,
+            "下载文件",
+            User.load(request.session.get("uid")).username,
+            f"下载 {sanitize_path(path, base_dir)}",
+            False,
+        )
         raise HTTPException(status_code=404, detail="Not Found")
     audit_log(
         logger,
@@ -293,7 +379,14 @@ def file_read(request: Request, path: str, encoding: str = "utf-8"):
     base_dir = User.load(request.session.get("uid")).base_dir
     content = read_file(path, base_dir, encoding)
     if content is None:
-        return {"status": "failed", "message": "Read failed."}
+        audit_log(
+            logger,
+            "读取文件",
+            User.load(request.session.get("uid")).username,
+            f"读取 {sanitize_path(path, base_dir)}",
+            False,
+        )
+        return {"status": "failed", "message": "文件读取失败"}
     audit_log(
         logger,
         "读取文件",
@@ -313,8 +406,15 @@ def file_write(request: Request, data: Annotated[FileWriteForm, Form()]):
             User.load(request.session.get("uid")).username,
             f"写入 {sanitize_path(data.path, base_dir)}",
         )
-        return {"status": "success", "message": "Write success."}
-    return {"status": "failed", "message": "Write failed."}
+        return {"status": "success", "message": "文件保存成功"}
+    audit_log(
+        logger,
+        "写入文件",
+        User.load(request.session.get("uid")).username,
+        f"写入 {sanitize_path(data.path, base_dir)}",
+        False,
+    )
+    return {"status": "failed", "message": "文件保存失败"}
 
 
 @api.patch("/file/permission", dependencies=[Depends(User.is_authenticated)])
@@ -327,8 +427,15 @@ def file_permission(request: Request, data: Annotated[FilePermissionForm, Form()
             User.load(request.session.get("uid")).username,
             f"修改 {sanitize_path(data.path, base_dir)} 的权限",
         )
-        return {"status": "success", "message": "Permission updated."}
-    return {"status": "failed", "message": "Permission update failed."}
+        return {"status": "success", "message": "权限修改成功"}
+    audit_log(
+        logger,
+        "修改文件权限",
+        User.load(request.session.get("uid")).username,
+        f"修改 {sanitize_path(data.path, base_dir)} 的权限",
+        False,
+    )
+    return {"status": "failed", "message": "权限修改失败"}
 
 
 @api.patch("/file/move", dependencies=[Depends(User.is_authenticated)])
@@ -341,8 +448,15 @@ def file_move(request: Request, data: Annotated[FileMoveForm, Form()]):
             User.load(request.session.get("uid")).username,
             f"移动 {sanitize_path(data.source, base_dir)} 到 {sanitize_path(data.destination, base_dir)}",
         )
-        return {"status": "success", "message": "Move success."}
-    return {"status": "failed", "message": "Move failed."}
+        return {"status": "success", "message": "文件移动成功"}
+    audit_log(
+        logger,
+        "移动文件",
+        User.load(request.session.get("uid")).username,
+        f"移动 {sanitize_path(data.source, base_dir)} 到 {sanitize_path(data.destination, base_dir)}",
+        False,
+    )
+    return {"status": "failed", "message": "文件移动失败"}
 
 
 @api.delete("/file/delete", dependencies=[Depends(User.is_authenticated)])
@@ -355,8 +469,15 @@ def file_delete(request: Request, data: Annotated[FileDeleteForm, Form()]):
             User.load(request.session.get("uid")).username,
             f"删除 {sanitize_path(data.path, base_dir)}",
         )
-        return {"status": "success", "message": "Delete success."}
-    return {"status": "failed", "message": "Delete failed."}
+        return {"status": "success", "message": "文件删除成功"}
+    audit_log(
+        logger,
+        "删除文件",
+        User.load(request.session.get("uid")).username,
+        f"删除 {sanitize_path(data.path, base_dir)}",
+        False,
+    )
+    return {"status": "failed", "message": "文件删除失败"}
 
 
 @api.post("/file/create", dependencies=[Depends(User.is_authenticated)])
@@ -369,8 +490,15 @@ def file_create(request: Request, data: Annotated[FileCreateForm, Form()]):
             User.load(request.session.get("uid")).username,
             f"创建 {sanitize_path(data.path, base_dir)}",
         )
-        return {"status": "success", "message": "Create success."}
-    return {"status": "failed", "message": "Create failed."}
+        return {"status": "success", "message": "文件创建成功"}
+    audit_log(
+        logger,
+        "创建文件",
+        User.load(request.session.get("uid")).username,
+        f"创建 {sanitize_path(data.path, base_dir)}",
+        False,
+    )
+    return {"status": "failed", "message": "文件创建失败"}
 
 
 @api.get("/system/group/list", dependencies=[Depends(User.is_authenticated)])

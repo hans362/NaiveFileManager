@@ -55,10 +55,14 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
     </div>
   </a-form-item>
   <a-form-item label="基础目录">
-    <a-input
-      v-model="createForm.base_dir"
-      placeholder="请输入基础目录"
-    ></a-input>
+    <a-input-group compact>
+      <a-input
+        v-model="createForm.base_dir"
+        placeholder="请输入基础目录"
+        style="width: calc(100% - 32px)"
+      ></a-input>
+      <a-button icon="folder" @click="showDirSelector('create')"></a-button>
+    </a-input-group>
   </a-form-item>
   <a-form-item label="角色">
     <a-select
@@ -93,7 +97,14 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
     </div>
   </a-form-item>
   <a-form-item label="基础目录">
-    <a-input v-model="editForm.base_dir" placeholder="请输入基础目录"></a-input>
+    <a-input-group compact>
+      <a-input
+        v-model="editForm.base_dir"
+        placeholder="请输入基础目录"
+        style="width: calc(100% - 32px)"
+      ></a-input>
+      <a-button icon="folder" @click="showDirSelector('edit')"></a-button>
+    </a-input-group>
   </a-form-item>
   <a-form-item label="角色">
     <a-select
@@ -134,6 +145,48 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
     ></a-input>
   </a-form-item>
 </a-modal>
+
+<a-modal
+  :visible="dirSelectorVisible"
+  title="选择目录"
+  @ok="handleDirSelect"
+  @cancel="dirSelectorVisible = false"
+  :ok-text="'确定'"
+  :cancel-text="'取消'"
+>
+  <a-breadcrumb style="margin-bottom: 16px">
+    <a-breadcrumb-item>
+      <a @click="navigateDir('/')">/</a>
+    </a-breadcrumb-item>
+    <template v-for="(part, index) in currentPath.split('/').filter(Boolean)">
+      <a-breadcrumb-item :key="index">
+        <a
+          @click="navigateDir(currentPath.split('/').slice(0, index + 1).join('/'))"
+          >{{ part }}</a
+        >
+      </a-breadcrumb-item>
+    </template>
+  </a-breadcrumb>
+  <a-list :data-source="dirList" :loading="dirLoading">
+    <a-list-item slot="renderItem" slot-scope="item">
+      <a-list-item-meta>
+        <template slot="avatar">
+          <a-icon :type="item.type === 'dir' ? 'folder' : 'file'" />
+        </template>
+        <template slot="title">
+          <a
+            slot="title"
+            @click="item.type === 'dir' && navigateDir(
+            currentPath === '/' ? '/' + item.name : currentPath + '/' + item.name
+          )"
+          >
+            {{ item.name }}
+          </a>
+        </template>
+      </a-list-item-meta>
+    </a-list-item>
+  </a-list>
+</a-modal>
 {% endraw %} {% endblock %} {% block script %} {% raw %}
 <script>
   new Vue({
@@ -142,6 +195,11 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
       return {
         createModalVisible: false,
         editModalVisible: false,
+        dirSelectorVisible: false,
+        dirSelectorMode: 'create',
+        currentPath: '/',
+        dirList: [],
+        dirLoading: false,
         editForm: {
           username: '',
           password: '',
@@ -351,6 +409,49 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
         .catch(() => {
           this.$message.error('更新失败');
         });
+      },
+      loadDirList(path = '/') {
+        this.dirLoading = true;
+        axios.get('/api/file/list', {
+          params: {
+            path,
+            page: 1,
+            per_page: 1000,
+            admin: true,
+          },
+        })
+        .then(response => {
+          if (response.data.status === 'success') {
+            this.dirList = response.data.data.items.filter(item => item.type === 'dir');
+          } else {
+            this.$message.error(response.data.message);
+          }
+        })
+        .catch(() => {
+          this.$message.error('加载目录列表失败');
+        })
+        .finally(() => {
+          this.dirLoading = false;
+        });
+      },
+      showDirSelector(mode) {
+        this.dirSelectorMode = mode;
+        this.currentPath = mode === 'create' ? this.createForm.base_dir || '/' : this.editForm.base_dir || '/';
+        this.dirSelectorVisible = true;
+        this.loadDirList(this.currentPath);
+      },
+      navigateDir(path) {
+        this.currentPath = path === '/' ? '/' : path.replace(/\/+/g, '/');
+        this.loadDirList(this.currentPath);
+      },
+      handleDirSelect() {
+        const normalizedPath = this.currentPath === '/' ? '/' : this.currentPath.replace(/\/+/g, '/');
+        if (this.dirSelectorMode === 'create') {
+          this.createForm.base_dir = normalizedPath;
+        } else {
+          this.editForm.base_dir = normalizedPath;
+        }
+        this.dirSelectorVisible = false;
       },
       {% endraw %}{% include "common.js" %}{% raw %}
     },

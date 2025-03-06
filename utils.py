@@ -2,8 +2,25 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 from datetime import datetime
+
+
+def validate_password(password: str) -> str | bool:
+    if not password:
+        return "密码不能为空"
+    if len(password) < 12:
+        return "密码长度至少12位"
+    if not re.search(r"[A-Z]", password):
+        return "密码必须包含大写字母"
+    if not re.search(r"[a-z]", password):
+        return "密码必须包含小写字母"
+    if not re.search(r"\d", password):
+        return "密码必须包含数字"
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`\'"\\]', password):
+        return "密码必须包含特殊字符"
+    return True
 
 
 def sha256(string: str) -> str:
@@ -215,4 +232,4 @@ def list_logs(date: str, page: int = 1, per_page: int = 15) -> list:
 
 
 if __name__ == "__main__":
-    print(list_logs("2025-03-05"))
+    pass
