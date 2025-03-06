@@ -50,6 +50,7 @@ menu_key %}logs{% endblock %} {% block content %} {% raw %}
           new_password: '',
           confirm_password: ''
         },
+        collapsed: window.localStorage.getItem('collapsed') === 'true',
         columns: [
           {
             title: "时间",

@@ -224,6 +224,7 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
           pageSize: 15,
           total: 0,
         },
+        collapsed: window.localStorage.getItem('collapsed') === 'true',
         columns: [
           {
             title: "用户名",
@@ -292,12 +293,11 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
       showEditModal(record) {
         this.editForm = {
           ...record,
-          password: '' // 清空密码字段
+          password: ''
         };
         this.editModalVisible = true;
       },
       showDeleteConfirm(record) {
-        // 检查是否为当前用户
         if (record.is_current_user) {
           this.$message.warning('不能删除当前登录用户');
           return;

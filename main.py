@@ -15,6 +15,7 @@ from forms import (
     FileDeleteForm,
     FileMoveForm,
     FilePermissionForm,
+    FileUploadForm,
     FileWriteForm,
     UserCreateForm,
     UserDeleteForm,
@@ -36,6 +37,7 @@ from utils import (
     read_file,
     sanitize_path,
     sha256,
+    upload_file,
     validate_password,
     write_file,
 )
@@ -486,19 +488,46 @@ def file_create(request: Request, data: Annotated[FileCreateForm, Form()]):
     if create_file(data.path, data.type, base_dir):
         audit_log(
             logger,
-            "创建文件",
+            f"创建{'文件夹' if data.type == 'dir' else '文件'}",
             User.load(request.session.get("uid")).username,
             f"创建 {sanitize_path(data.path, base_dir)}",
         )
-        return {"status": "success", "message": "文件创建成功"}
+        return {
+            "status": "success",
+            "message": f"{'文件夹' if data.type == 'dir' else '文件'}创建成功",
+        }
     audit_log(
         logger,
-        "创建文件",
+        f"创建{'文件夹' if data.type == 'dir' else '文件'}",
         User.load(request.session.get("uid")).username,
         f"创建 {sanitize_path(data.path, base_dir)}",
         False,
     )
-    return {"status": "failed", "message": "文件创建失败"}
+    return {
+        "status": "failed",
+        "message": f"{'文件夹' if data.type == 'dir' else '文件'}创建失败",
+    }
+
+
+@api.post("/file/upload", dependencies=[Depends(User.is_authenticated)])
+def file_upload(request: Request, data: Annotated[FileUploadForm, Form()]):
+    base_dir = User.load(request.session.get("uid")).base_dir
+    if upload_file(data.path, data.file, base_dir):
+        audit_log(
+            logger,
+            "上传文件",
+            User.load(request.session.get("uid")).username,
+            f"上传 {sanitize_path(data.path, base_dir)}",
+        )
+        return {"status": "success", "message": "文件上传成功"}
+    audit_log(
+        logger,
+        "上传文件",
+        User.load(request.session.get("uid")).username,
+        f"上传 {sanitize_path(data.path, base_dir)}",
+        False,
+    )
+    return {"status": "failed", "message": "文件上传失败"}
 
 
 @api.get("/system/group/list", dependencies=[Depends(User.is_authenticated)])

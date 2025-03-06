@@ -1,3 +1,4 @@
+from fastapi import UploadFile
 from pydantic import BaseModel
 
 
@@ -54,3 +55,9 @@ class FileDeleteForm(BaseModel):
 class FileCreateForm(BaseModel):
     path: str
     type: str
+
+
+class FileUploadForm(BaseModel):
+    path: str
+    file: UploadFile
+    encoding: str = "utf-8"

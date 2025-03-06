@@ -25,7 +25,12 @@
   <body>
     <div id="app">
       <a-layout style="min-height: 100vh">
-        <a-layout-sider theme="dark">
+        <a-layout-sider
+          theme="dark"
+          v-model="collapsed"
+          collapsible
+          :trigger="null"
+        >
           <div
             class="logo"
             style="
@@ -33,15 +38,21 @@
               padding: 16px;
               color: white;
               text-align: center;
+              overflow: hidden;
+              white-space: nowrap;
             "
           >
-            <h2 style="margin: 0; color: white">NaiveFileManager</h2>
+            {% raw %}
+            <h2 style="margin: 0; color: white">
+              {{ collapsed ? 'NFM' : 'NaiveFileManager' }}
+            </h2>
+            {% endraw %}
           </div>
           <a-menu
             theme="dark"
             mode="inline"
             :default-selected-keys="['{% block menu_key %}{% endblock %}']"
-            style="height: calc(100% - 64px)"
+            :inline-collapsed="collapsed"
             @click="handleMenuClick"
           >
             <a-menu-item key="files">
@@ -70,8 +81,26 @@
               align-items: center;
             "
           >
-            <div style="font-size: 16px; font-weight: 500; color: white">
-              {{ self.title() }}
+            <div style="display: flex; align-items: center">
+              <a-icon
+                class="trigger"
+                :type="collapsed ? 'menu-unfold' : 'menu-fold'"
+                style="font-size: 18px; color: white; cursor: pointer"
+                @click="() => {
+                  collapsed = !collapsed
+                  window.localStorage.setItem('collapsed', collapsed)
+                }"
+              ></a-icon>
+              <span
+                style="
+                  font-size: 16px;
+                  font-weight: 500;
+                  color: white;
+                  margin-left: 16px;
+                "
+              >
+                {{ self.title() }}
+              </span>
             </div>
             <div style="display: flex; align-items: center">
               <a-dropdown>

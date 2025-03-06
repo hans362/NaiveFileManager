@@ -8,6 +8,14 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
   </a-breadcrumb>
   <a-card>
     <div style="margin-bottom: 16px; display: flex; gap: 8px">
+      <a-button
+        type="primary"
+        style="background-color: #52c41a; border-color: #52c41a"
+        @click="showUploadModal"
+      >
+        <a-icon type="upload"></a-icon>
+        上传文件
+      </a-button>
       <a-button-group>
         <a-button type="primary" @click="showCreateModal('file')">
           <a-icon type="file-add"></a-icon>
@@ -203,6 +211,27 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
     </a-select>
   </a-form-item>
 </a-modal>
+<a-modal
+  :visible="uploadModalVisible"
+  title="上传文件"
+  @ok="handleUpload"
+  @cancel="handleUploadCancel"
+  :ok-text="'开始上传'"
+  :cancel-text="'取消'"
+>
+  <a-upload
+    :before-upload="beforeUpload"
+    :file-list="uploadFileList"
+    :multiple="true"
+    @change="handleUploadChange"
+    :remove="handleUploadRemove"
+  >
+    <a-button>
+      <a-icon type="upload"></a-icon>
+      选择文件
+    </a-button>
+  </a-upload>
+</a-modal>
 {% endraw %} {% endblock %} {% block script %} {% raw %}
 <script>
   new Vue({
@@ -254,6 +283,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           new_password: '',
           confirm_password: ''
         },
+        collapsed: window.localStorage.getItem('collapsed') === 'true',
         columns: [
           {
             title: "名称",
@@ -293,6 +323,9 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
             scopedSlots: { customRender: "action" },
           },
         ],
+        uploadModalVisible: false,
+        uploadFileList: [],
+        uploadingIndex: -1,
       };
     },
     computed: {
@@ -605,7 +638,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
                 this.editor.refresh();
               });
             } else {
-              this.$message.error("此文件过大或不是文本文件，无法编辑");
+              this.$message.error(response.data.message);
             }
           })
           .catch(() => {
@@ -629,6 +662,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
             if (response.data.status === "success") {
               this.$message.success("保存成功");
               this.loadFileList();
+              this.editModalVisible = false;
             } else {
               this.$message.error(response.data.message);
             }
@@ -636,9 +670,6 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           .catch(() => {
             this.$message.error("保存失败");
           })
-          .finally(() => {
-            this.editModalVisible = false;
-          });
       },
       getFileMode(filename) {
         const ext = filename.split(".").pop().toLowerCase();
@@ -727,6 +758,93 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         const parentPath =
           this.currentPath.split("/").slice(0, -1).join("/") || "/";
         this.navigateTo(parentPath);
+      },
+      showUploadModal() {
+        this.uploadModalVisible = true;
+        this.uploadFileList = [];
+        this.uploadingIndex = -1;
+      },
+      handleUploadCancel() {
+        this.uploadModalVisible = false;
+        this.uploadFileList = [];
+        this.uploadingIndex = -1;
+      },
+      beforeUpload(file) {
+        this.uploadFileList.push({
+          uid: Date.now() + this.uploadFileList.length,
+          name: file.name,
+          status: 'waiting',
+          file: file,
+          percent: 0
+        });
+        return false;
+      },
+      handleUploadChange(info) {
+        const targetFile = this.uploadFileList.find(item => item.uid === info.file.uid);
+        if (targetFile) {
+          targetFile.status = info.file.status;
+          targetFile.percent = info.file.percent;
+        }
+      },
+      handleUploadRemove(file) {
+        const index = this.uploadFileList.findIndex(item => item.uid === file.uid);
+        if (index !== -1) {
+          this.uploadFileList.splice(index, 1);
+        }
+      },
+      async handleUpload() {
+        if (this.uploadFileList.length === 0) {
+          this.$message.error('请选择要上传的文件');
+          return;
+        }
+
+        for (let i = 0; i < this.uploadFileList.length; i++) {
+          const fileInfo = this.uploadFileList[i];
+          if (fileInfo.status === 'success') continue;
+
+          this.uploadingIndex = i;
+          fileInfo.status = 'uploading';
+          fileInfo.percent = 0;
+
+          const path = this.currentPath === '/'
+            ? '/' + fileInfo.name
+            : this.currentPath + '/' + fileInfo.name;
+
+          const formData = new FormData();
+          formData.append('path', path);
+          formData.append('file', fileInfo.file);
+
+          try {
+            const response = await axios.post('/api/file/upload', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              },
+              onUploadProgress: (progressEvent) => {
+                fileInfo.percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              }
+            });
+
+            if (response.data.status === 'success') {
+              fileInfo.status = 'success';
+              this.$message.success(`文件 ${fileInfo.name} 上传成功`);
+            } else {
+              fileInfo.status = 'error';
+              this.$message.error(`文件 ${fileInfo.name} 上传失败`);
+            }
+          } catch (error) {
+            fileInfo.status = 'error';
+            this.$message.error(`文件 ${fileInfo.name} 上传失败`);
+          }
+        }
+
+        this.loadFileList();
+        if (this.uploadFileList.every(file => file.status === 'success')) {
+          this.uploadFileList = [];
+          this.uploadingIndex = -1;
+        } else {
+          this.uploadFileList = this.uploadFileList.filter(file => file.status !== 'success');
+          this.uploadingIndex = -1;
+        }
       },
       {% endraw %}{% include "common.js" %}{% raw %}
     },

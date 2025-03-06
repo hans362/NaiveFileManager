@@ -6,6 +6,8 @@ import re
 import shutil
 from datetime import datetime
 
+from fastapi import UploadFile
+
 
 def validate_password(password: str) -> str | bool:
     if not password:
@@ -181,6 +183,20 @@ def create_file(path: str, type: str, base_dir: str = "/") -> bool:
             open(path, "w").close()
         elif type == "dir":
             os.makedirs(path)
+        return True
+    except Exception:
+        return False
+
+
+def upload_file(path: str, file: UploadFile, base_dir: str = "/") -> bool:
+    path = sanitize_path(path, base_dir)
+    if not os.path.exists(os.path.dirname(path)):
+        return False
+    if os.path.exists(path):
+        return False
+    try:
+        with open(path, "wb") as f:
+            f.write(file.file.read())
         return True
     except Exception:
         return False
