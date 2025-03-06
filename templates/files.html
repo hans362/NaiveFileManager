@@ -32,11 +32,38 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
       <a-button @click="loadFileList">
         <a-icon type="reload"></a-icon>刷新
       </a-button>
+      <a-button
+        v-if="selectedRows.length > 0"
+        type="danger"
+        @click="showBatchDeleteConfirm"
+      >
+        <a-icon type="delete"></a-icon>
+        批量删除 ({{ selectedRows.length }})
+      </a-button>
+      <div style="flex: 1"></div>
+      <a-input-search
+        v-model="searchKeyword"
+        placeholder="搜索文件 / 文件夹..."
+        style="width: 250px"
+        @search="handleSearch"
+        @change="handleSearchChange"
+      >
+      </a-input-search>
     </div>
+    <a-alert
+      v-if="selectedRows.length > 1"
+      message="批量操作提示"
+      description="您已选择多个文件，请不要在批量操作时刷新或关闭页面，以免批量任务中断。"
+      type="warning"
+      show-icon
+      style="margin-bottom: 16px"
+    ></a-alert>
     <a-table
       :columns="columns"
       :data-source="fileList"
       :pagination="pagination"
+      :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: onSelectChange }"
+      :row-key="record => record.name"
       @change="handleTableChange"
     >
       <template slot="name" slot-scope="text, record">
@@ -84,8 +111,8 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
             编辑
           </a-button>
           <a-button type="link" @click="showRenameModal(record)">
-            <a-icon type="edit"></a-icon>
-            重命名
+            <a-icon type="swap"></a-icon>
+            移动 / 重命名
           </a-button>
           <a-button type="link" @click="showPermissionModal(record)">
             <a-icon type="setting"></a-icon>
@@ -119,7 +146,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
 </a-modal>
 <a-modal
   :visible="renameModalVisible"
-  title="重命名"
+  title="移动 / 重命名"
   @ok="handleRename"
   @cancel="renameModalVisible = false"
   :ok-text="'确定'"
@@ -130,6 +157,16 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
       v-model="newName"
       :placeholder="'请输入新的名称（原名称：' + oldName + '）'"
     ></a-input>
+  </a-form-item>
+  <a-form-item label="存放路径">
+    <a-input-group compact>
+      <a-input
+        v-model="targetPath"
+        placeholder="请选择存放路径"
+        style="width: calc(100% - 32px)"
+      ></a-input>
+      <a-button icon="folder" @click="showDirSelector"></a-button>
+    </a-input-group>
   </a-form-item>
 </a-modal>
 <a-modal
@@ -232,19 +269,64 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
     </a-button>
   </a-upload>
 </a-modal>
+<a-modal
+  :visible="dirSelectorVisible"
+  title="选择目录"
+  @ok="handleDirSelect"
+  @cancel="dirSelectorVisible = false"
+  :ok-text="'确定'"
+  :cancel-text="'取消'"
+>
+  <a-breadcrumb style="margin-bottom: 16px">
+    <a-breadcrumb-item>
+      <a @click="navigateDir('/')">/</a>
+    </a-breadcrumb-item>
+    <template v-for="(part, index) in selectorPath.split('/').filter(Boolean)">
+      <a-breadcrumb-item :key="index">
+        <a
+          @click="navigateDir('/' + selectorPath.split('/').slice(1, index + 2).join('/'))"
+          >{{ part }}</a
+        >
+      </a-breadcrumb-item>
+    </template>
+  </a-breadcrumb>
+  <a-list :data-source="dirList" :loading="dirLoading">
+    <a-list-item slot="renderItem" slot-scope="item">
+      <a-list-item-meta>
+        <template slot="avatar">
+          <a-icon :type="item.type === 'dir' ? 'folder' : 'file'" />
+        </template>
+        <template slot="title">
+          <a
+            v-if="item.type === 'dir'"
+            @click="navigateDir(selectorPath === '/' ? '/' + item.name : selectorPath + '/' + item.name)"
+          >
+            {{ item.name }}
+          </a>
+          <span v-else>{{ item.name }}</span>
+        </template>
+      </a-list-item-meta>
+    </a-list-item>
+  </a-list>
+</a-modal>
 {% endraw %} {% endblock %} {% block script %} {% raw %}
 <script>
   new Vue({
     el: "#app",
     data() {
       return {
-        currentPath: "/",
+        currentPath: window.localStorage.getItem('lastPath') || "/",
+        searchKeyword: "",
         createModalVisible: false,
         createType: "file",
         createName: "",
         renameModalVisible: false,
         oldName: "",
         newName: "",
+        targetPath: "",
+        dirSelectorVisible: false,
+        selectorPath: "/",
+        dirList: [],
         editModalVisible: false,
         editingFile: null,
         editor: null,
@@ -326,6 +408,9 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         uploadModalVisible: false,
         uploadFileList: [],
         uploadingIndex: -1,
+        selectedRowKeys: [],
+        selectedRows: [],
+        dirLoading: false,
       };
     },
     computed: {
@@ -387,12 +472,15 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           });
       },
       loadFileList() {
+        this.selectedRowKeys = [];
+        this.selectedRows = [];
         Promise.all([
           this.loadUsers(),
           this.loadGroups(),
           axios.get("/api/file/list", {
             params: {
               path: this.currentPath,
+              search: this.searchKeyword,
               page: this.pagination.current,
               per_page: this.pagination.pageSize,
             },
@@ -419,13 +507,20 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         this.loadFileList();
       },
       enterDirectory(dirname) {
-        this.currentPath += "/" + dirname;
+        const newPath = this.currentPath === "/" ? "/" + dirname : this.currentPath + "/" + dirname;
+        this.currentPath = newPath;
         this.pagination.current = 1;
+        this.selectedRowKeys = [];
+        this.selectedRows = [];
+        window.localStorage.setItem('lastPath', newPath);
         this.loadFileList();
       },
       navigateTo(path) {
         this.currentPath = path;
         this.pagination.current = 1;
+        this.selectedRowKeys = [];
+        this.selectedRows = [];
+        window.localStorage.setItem('lastPath', path);
         this.loadFileList();
       },
       showCreateModal(type) {
@@ -475,6 +570,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
       showRenameModal(record) {
         this.oldName = record.name;
         this.newName = record.name;
+        this.targetPath = this.currentPath;
         this.renameModalVisible = true;
       },
       handleRename() {
@@ -482,8 +578,8 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           this.$message.error("请输入新名称");
           return;
         }
-        if (this.newName === this.oldName) {
-          this.$message.info("新名称与原名称相同");
+        if (this.newName === this.oldName && this.targetPath === this.currentPath) {
+          this.$message.info("名称和路径都未改变");
           this.renameModalVisible = false;
           return;
         }
@@ -493,9 +589,9 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
             ? "/" + this.oldName
             : this.currentPath + "/" + this.oldName;
         const destPath =
-          this.currentPath === "/"
+          this.targetPath === "/"
             ? "/" + this.newName
-            : this.currentPath + "/" + this.newName;
+            : this.targetPath + "/" + this.newName;
 
         const params = new URLSearchParams();
         params.append("source", sourcePath);
@@ -509,18 +605,54 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
           })
           .then((response) => {
             if (response.data.status === "success") {
-              this.$message.success("重命名成功");
+              this.$message.success("移动 / 重命名成功");
               this.loadFileList();
             } else {
-              this.$message.error(response.data.message);
+              this.$message.error("移动 / 重命名失败");
             }
           })
           .catch(() => {
-            this.$message.error("重命名失败");
+            this.$message.error("移动 / 重命名失败");
           })
           .finally(() => {
             this.renameModalVisible = false;
           });
+      },
+      showDirSelector() {
+        this.selectorPath = this.targetPath;
+        this.dirSelectorVisible = true;
+        this.loadDirList(this.selectorPath);
+      },
+      navigateDir(path) {
+        this.selectorPath = path;
+        this.loadDirList(path);
+      },
+      handleDirSelect() {
+        this.targetPath = this.selectorPath === '/' ? '/' : this.selectorPath.replace(/\/+/g, '/');
+        this.dirSelectorVisible = false;
+      },
+      loadDirList(path = '/') {
+        this.dirLoading = true;
+        axios.get('/api/file/list', {
+          params: {
+            path,
+            page: 1,
+            per_page: 1000,
+          },
+        })
+        .then(response => {
+          if (response.data.status === 'success') {
+            this.dirList = response.data.data.items.filter(item => item.type === 'dir');
+          } else {
+            this.$message.error(response.data.message);
+          }
+        })
+        .catch(() => {
+          this.$message.error('加载目录列表失败');
+        })
+        .finally(() => {
+          this.dirLoading = false;
+        });
       },
       showDeleteConfirm(record) {
         const path =
@@ -530,7 +662,7 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
 
         this.$confirm({
           title: "确认删除",
-          content: `确定要删除${record.type === "dir" ? "文件夹" : "文件"} "${
+          content: `确定要删除${record.type === "dir" ? "文件夹" : "文件"} " ${
             record.name
           }" 吗？`,
           okText: "确认",
@@ -757,6 +889,9 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         if (this.currentPath === "/") return;
         const parentPath =
           this.currentPath.split("/").slice(0, -1).join("/") || "/";
+        this.selectedRowKeys = [];
+        this.selectedRows = [];
+        window.localStorage.setItem('lastPath', parentPath);
         this.navigateTo(parentPath);
       },
       showUploadModal() {
@@ -844,6 +979,78 @@ menu_key %}files{% endblock %} {% block content %} {% raw %}
         } else {
           this.uploadFileList = this.uploadFileList.filter(file => file.status !== 'success');
           this.uploadingIndex = -1;
+        }
+      },
+      onSelectChange(selectedRowKeys, selectedRows) {
+        this.selectedRowKeys = selectedRowKeys;
+        this.selectedRows = selectedRows;
+      },
+      showBatchDeleteConfirm() {
+        this.$confirm({
+          title: '确认批量删除',
+          content: `确定要删除选中的 ${this.selectedRows.length} 个文件/文件夹吗？此操作不可恢复！`,
+          okText: '确认删除',
+          okType: 'danger',
+          cancelText: '取消',
+          onOk: () => this.handleBatchDelete()
+        });
+      },
+      async handleBatchDelete() {
+        const total = this.selectedRows.length;
+        let success = 0;
+        let failed = 0;
+
+        for (const record of this.selectedRows) {
+          const path = this.currentPath === '/'
+            ? '/' + record.name
+            : this.currentPath + '/' + record.name;
+
+          const params = new URLSearchParams();
+          params.append('path', path);
+
+          try {
+            const response = await axios.delete('/api/file/delete', {
+              data: params,
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            });
+
+            if (response.data.status === 'success') {
+              success++;
+            } else {
+              failed++;
+              this.$message.error(`删除 ${record.name} 失败`);
+            }
+          } catch (error) {
+            failed++;
+            this.$message.error(`删除 ${record.name} 失败`);
+          }
+        }
+
+        if (success > 0) {
+          this.$message.success(`成功删除 ${success} 个文件/文件夹`);
+        }
+        if (failed > 0) {
+          this.$message.error(`${failed} 个文件/文件夹删除失败`);
+        }
+
+        this.selectedRowKeys = [];
+        this.selectedRows = [];
+        this.loadFileList();
+      },
+      handleSearch(value) {
+        this.searchKeyword = value;
+        this.pagination.current = 1;
+        this.loadFileList();
+      },
+      handleSearchChange(e) {
+        if (!e.target.value) {
+          this.searchKeyword = "";
+          this.pagination.current = 1;
+          this.loadFileList();
+        } else {
+          this.handleSearch(e.target.value);
         }
       },
       {% endraw %}{% include "common.js" %}{% raw %}

@@ -69,10 +69,12 @@ def sanitize_path(path: str, base_dir: str = "/") -> str:
 
 
 def list_files(
-    path: str, base_dir: str = "/", page: int = 1, per_page: int = 15
+    path: str, base_dir: str = "/", search: str = "", page: int = 1, per_page: int = 15
 ) -> dict:
     path = sanitize_path(path, base_dir)
     all_files = list_dir(path)
+    if search:
+        all_files = [file for file in all_files if search in file]
     total = len(all_files)
     files = []
 

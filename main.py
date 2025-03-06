@@ -329,7 +329,12 @@ def user_password(request: Request, data: Annotated[UserPasswordForm, Form()]):
 
 @api.get("/file/list", dependencies=[Depends(User.is_authenticated)])
 def file_list(
-    request: Request, path: str, page: int = 1, per_page: int = 15, admin: bool = False
+    request: Request,
+    path: str,
+    search: str = "",
+    page: int = 1,
+    per_page: int = 15,
+    admin: bool = False,
 ):
     if admin and User.load(request.session.get("uid")).role == "admin":
         base_dir = "/"
@@ -342,7 +347,10 @@ def file_list(
             User.load(request.session.get("uid")).username,
             f"查看 {sanitize_path(path, base_dir)}",
         )
-        return {"status": "success", "data": list_files(path, base_dir, page, per_page)}
+        return {
+            "status": "success",
+            "data": list_files(path, base_dir, search, page, per_page),
+        }
     except Exception:
         audit_log(
             logger,
