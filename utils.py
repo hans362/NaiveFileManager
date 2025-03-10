@@ -7,6 +7,29 @@ import shutil
 from datetime import datetime
 
 from fastapi import UploadFile
+from gmssl import sm2
+
+
+def generate_sm2_keypair() -> tuple[str, str]:
+    private_key = os.urandom(32).hex()
+    sm2_crypt = sm2.CryptSM2(
+        public_key="",
+        private_key=private_key,
+    )
+    public_key = "04" + sm2_crypt._kg(int(private_key, 16), sm2.default_ecc_table["g"])
+    return private_key, public_key
+
+
+def sm2_decrypt(private_key: str, ciphertext: bytes) -> str:
+    try:
+        sm2_crypt = sm2.CryptSM2(
+            public_key="",
+            private_key=private_key,
+            mode=1,
+        )
+        return sm2_crypt.decrypt(ciphertext).decode()
+    except Exception:
+        return ""
 
 
 def validate_password(password: str) -> str | bool:

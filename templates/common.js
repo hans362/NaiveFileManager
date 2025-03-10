@@ -70,8 +70,8 @@ handleChangePassword() {
   }
 
   const params = new URLSearchParams();
-  params.append('old_password', this.changePasswordForm.old_password);
-  params.append('new_password', this.changePasswordForm.new_password);
+  params.append('old_password', this.sm2Encrypt(this.changePasswordForm.old_password));
+  params.append('new_password', this.sm2Encrypt(this.changePasswordForm.new_password));
 
   axios.patch('/api/user/password', params, {
     headers: {
@@ -89,5 +89,9 @@ handleChangePassword() {
   .catch(() => {
     this.$message.error('密码修改失败');
   });
+},
+sm2Encrypt(data) {
+  const publicKey = "{% endraw %}{{ public_key }}{% raw %}";
+  return sm2.doEncrypt(data, publicKey);
 },
 {% endraw %}

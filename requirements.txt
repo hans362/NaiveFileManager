@@ -3,3 +3,4 @@ argon2-cffi
 python-multipart
 itsdangerous
 jinja2
+gmssl

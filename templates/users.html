@@ -348,7 +348,7 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
 
         const params = new URLSearchParams();
         params.append('username', this.createForm.username);
-        params.append('password', this.createForm.password);
+        params.append('password', this.sm2Encrypt(this.createForm.password));
         params.append('base_dir', this.createForm.base_dir);
         params.append('role', this.createForm.role);
 
@@ -387,7 +387,7 @@ menu_key %}users{% endblock %} {% block content %} {% raw %}
         const params = new URLSearchParams();
         params.append('username', this.editForm.username);
         if (this.editForm.password) {
-          params.append('password', this.editForm.password);
+          params.append('password', this.sm2Encrypt(this.editForm.password));
         }
         params.append('base_dir', this.editForm.base_dir);
         params.append('role', this.editForm.role);

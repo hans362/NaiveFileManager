@@ -29,6 +29,7 @@ from utils import (
     change_file_permission,
     create_file,
     delete_file,
+    generate_sm2_keypair,
     get_groups_list,
     get_users_list,
     list_files,
@@ -37,6 +38,7 @@ from utils import (
     read_file,
     sanitize_path,
     sha256,
+    sm2_decrypt,
     upload_file,
     validate_password,
     write_file,
@@ -54,6 +56,14 @@ if not os.path.exists(os.path.join(os.getcwd(), "data/logs")):
 
 if not os.path.exists("data/.secretkey"):
     open("data/.secretkey", "wb").write(os.urandom(32))
+
+if not os.path.exists("data/.privatekey") or not os.path.exists("data/.publickey"):
+    private_key, public_key = generate_sm2_keypair()
+    open("data/.privatekey", "w").write(private_key)
+    open("data/.publickey", "w").write(public_key)
+
+public_key = open("data/.publickey").read()
+private_key = open("data/.privatekey").read()
 
 log_handler = TimedRotatingFileHandler(
     os.path.join(os.getcwd(), "data/logs/app.log"), when="midnight", backupCount=60
@@ -94,7 +104,9 @@ def login(request: Request):
         User.is_authenticated(request)
         return RedirectResponse("/files")
     except Exception:
-        return templates.TemplateResponse("login.html", {"request": request})
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "public_key": public_key}
+        )
 
 
 @app.get("/files")
@@ -103,7 +115,11 @@ def files(request: Request):
         User.is_authenticated(request)
         return templates.TemplateResponse(
             "files.html",
-            {"request": request, "user": User.load(request.session.get("uid"))},
+            {
+                "request": request,
+                "user": User.load(request.session.get("uid")),
+                "public_key": public_key,
+            },
         )
     except Exception:
         return RedirectResponse("/")
@@ -116,7 +132,11 @@ def users(request: Request):
         User.is_admin(request)
         return templates.TemplateResponse(
             "users.html",
-            {"request": request, "user": User.load(request.session.get("uid"))},
+            {
+                "request": request,
+                "user": User.load(request.session.get("uid")),
+                "public_key": public_key,
+            },
         )
     except Exception:
         return RedirectResponse("/")
@@ -129,7 +149,11 @@ def logs(request: Request):
         User.is_admin(request)
         return templates.TemplateResponse(
             "logs.html",
-            {"request": request, "user": User.load(request.session.get("uid"))},
+            {
+                "request": request,
+                "user": User.load(request.session.get("uid")),
+                "public_key": public_key,
+            },
         )
     except Exception:
         return RedirectResponse("/")
@@ -143,6 +167,7 @@ def status():
 @api.post("/user/login")
 def user_login(request: Request, data: Annotated[UserLoginForm, Form()]):
     user = User.load(sha256(data.username))
+    data.password = sm2_decrypt(private_key, bytes.fromhex(data.password))
     if user and User.verify_password(data.password, user.password):
         request.session["uid"] = user.id
         audit_log(logger, "用户登录", user.username)
@@ -197,6 +222,7 @@ def user_create(request: Request, data: Annotated[UserCreateForm, Form()]):
             False,
         )
         return {"status": "failed", "message": "用户已存在"}
+    data.password = sm2_decrypt(private_key, bytes.fromhex(data.password))
     validation = validate_password(data.password)
     if validation is not True:
         audit_log(
@@ -235,6 +261,7 @@ def user_update(request: Request, data: Annotated[UserUpdateForm, Form()]):
         )
         return {"status": "failed", "message": "用户不存在"}
     if data.password:
+        data.password = sm2_decrypt(private_key, bytes.fromhex(data.password))
         validation = validate_password(data.password)
         if validation is not True:
             audit_log(
@@ -300,6 +327,7 @@ def user_password(request: Request, data: Annotated[UserPasswordForm, Form()]):
     user = User.load(request.session.get("uid"))
     if not user:
         return {"status": "failed", "message": "用户不存在"}
+    data.old_password = sm2_decrypt(private_key, bytes.fromhex(data.old_password))
     if not User.verify_password(data.old_password, user.password):
         audit_log(
             logger,
@@ -308,6 +336,7 @@ def user_password(request: Request, data: Annotated[UserPasswordForm, Form()]):
             False,
         )
         return {"status": "failed", "message": "当前密码错误"}
+    data.new_password = sm2_decrypt(private_key, bytes.fromhex(data.new_password))
     validation = validate_password(data.new_password)
     if validation is not True:
         audit_log(
