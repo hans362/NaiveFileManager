@@ -22,9 +22,38 @@
     <script src="/static/js/python.js"></script>
     <script src="/static/js/shell.js"></script>
     <script src="/static/js/sm2.js"></script>
+    <style>
+      .mobile-warning {
+        display: none;
+      }
+      @media (max-width: 768px) {
+        body {
+          background: #f0f2f5;
+          height: 100vh;
+          margin: 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .mobile-warning {
+          display: block;
+        }
+        .ant-layout {
+          display: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app">
+      <div class="mobile-warning">
+        <a-alert
+          message="兼容性警告"
+          description="移动端不支持此应用，请使用桌面设备访问"
+          type="warning"
+          show-icon
+        ></a-alert>
+      </div>
       <a-layout style="min-height: 100vh">
         <a-layout-sider
           theme="dark"

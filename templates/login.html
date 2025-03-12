@@ -60,11 +60,30 @@
     .login-form .anticon {
       color: rgba(0, 0, 0, 0.25);
     }
+    .mobile-warning {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .mobile-warning {
+        display: block;
+      }
+      .login-container {
+        display: none;
+      }
+    }
   </style>
 </head>
 
 <body>
   <div id="app">
+    <div class="mobile-warning">
+      <a-alert
+        message="兼容性警告"
+        description="移动端不支持此应用，请使用桌面设备访问"
+        type="warning"
+        show-icon
+      ></a-alert>
+    </div>
     <div class="login-container">
       <div class="login-title">
         <h1>NaiveFileManager</h1>
@@ -105,7 +124,6 @@
   </div>
 
   <script>
-    const publicKey = "{{ public_key }}";
     new Vue({
       el: '#app',
       data() {
@@ -126,7 +144,7 @@
           this.loading = true;
           const params = new URLSearchParams();
           params.append('username', this.username);
-          params.append('password', sm2.doEncrypt(this.password, publicKey));
+          params.append('password', this.sm2Encrypt(this.password));
 
           axios.post('/api/user/login', params)
             .then(response => {
@@ -143,7 +161,8 @@
             .finally(() => {
               this.loading = false;
             });
-        }
+        },
+        {% include "common.js" %}
       }
     });
   </script>
