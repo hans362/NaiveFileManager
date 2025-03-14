@@ -1,0 +1,11 @@
+services:
+  nfm:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000" # 监听端口，按需修改
+    volumes:
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+      - ./nfm-data:/app/data # 数据目录，按需修改
+      - /:/host # 宿主机挂载点，按需修改
